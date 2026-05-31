@@ -43,6 +43,8 @@ export function getSupabaseClient(): SupabaseClient | null {
     end_stunde   INTEGER NOT NULL CHECK (end_stunde >= 8 AND end_stunde <= 17),
     status       TEXT NOT NULL DEFAULT 'erfasst'
                  CHECK (status IN ('erfasst', 'in_bearbeitung', 'fertig')),
+    typ          TEXT NOT NULL DEFAULT 'auftrag'
+                 CHECK (typ IN ('auftrag', 'buerozeit')),
     created_at   TIMESTAMPTZ DEFAULT NOW(),
     updated_at   TIMESTAMPTZ DEFAULT NOW()
   );
@@ -62,7 +64,12 @@ export function getSupabaseClient(): SupabaseClient | null {
   CREATE POLICY "allow_all" ON auftraege FOR ALL USING (true) WITH CHECK (true);
   CREATE POLICY "allow_all" ON urlaube   FOR ALL USING (true) WITH CHECK (true);
 
-  -- 3. Echtzeit-Synchronisation freischalten (WICHTIG für Live-Sync!)
+  -- 3. Falls die Tabelle bereits existiert: neue Spalte nachträglich hinzufügen
+  ALTER TABLE auftraege
+    ADD COLUMN IF NOT EXISTS typ TEXT NOT NULL DEFAULT 'auftrag'
+    CHECK (typ IN ('auftrag', 'buerozeit'));
+
+  -- 4. Echtzeit-Synchronisation freischalten (WICHTIG für Live-Sync!)
   ALTER PUBLICATION supabase_realtime ADD TABLE auftraege;
   ALTER PUBLICATION supabase_realtime ADD TABLE urlaube;
   ══════════════════════════════════════════════════════════════════

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Auftrag, MITARBEITER, STUNDEN, Status, STATUS_LABELS, AuftragFormData } from '@/lib/types';
+import { Auftrag, MITARBEITER, STUNDEN, Status, STATUS_LABELS, AuftragFormData, AuftragTyp, AUFTRAG_TYP_LABELS } from '@/lib/types';
 import { formatStunde } from '@/lib/dateUtils';
 
 interface Props {
@@ -38,6 +38,7 @@ export default function AuftragModal({ auftrag, prefill, onSave, onDelete, onClo
     start_stunde: auftrag?.start_stunde  ?? prefill?.start_stunde ?? 8,
     end_stunde:   auftrag?.end_stunde    ?? prefill?.end_stunde   ?? 9,
     status:       auftrag?.status        ?? 'erfasst',
+    typ:          auftrag?.typ           ?? 'auftrag',
   }));
 
   const [mehrtaegig, setMehrtaegig] = useState(
@@ -60,6 +61,7 @@ export default function AuftragModal({ auftrag, prefill, onSave, onDelete, onClo
       start_stunde: form.start_stunde,
       end_stunde:   form.end_stunde,
       status:       form.status,
+      typ:          form.typ,
     });
   };
 
@@ -84,6 +86,26 @@ export default function AuftragModal({ auftrag, prefill, onSave, onDelete, onClo
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto max-h-[82vh]">
+
+          {/* ── Typ-Auswahl ── */}
+          <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
+            {(['auftrag', 'buerozeit'] as AuftragTyp[]).map(t => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setForm(f => ({ ...f, typ: t }))}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors
+                  ${form.typ === t
+                    ? t === 'buerozeit'
+                      ? 'bg-orange-500 text-white shadow-sm'
+                      : 'bg-blue-900 text-white shadow-sm'
+                    : 'text-slate-500 hover:bg-slate-200'
+                  }`}
+              >
+                {AUFTRAG_TYP_LABELS[t]}
+              </button>
+            ))}
+          </div>
 
           {/* Titel */}
           <div>

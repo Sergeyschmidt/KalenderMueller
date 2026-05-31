@@ -152,11 +152,11 @@ function AuftragKarte({ auftrag, onClick }: { auftrag: Auftrag; onClick: () => v
       onClick={e => { e.stopPropagation(); onClick(); }}
       title={`${auftrag.titel}${subtitle ? ' · ' + subtitle : ''}`}
       className={`h-full w-full flex items-center gap-1 px-1.5 overflow-hidden
-                  cursor-grab select-none rounded-sm border-t-[3px] bg-white/85
-                  transition-opacity ${STATUS_BORDER_T[auftrag.status]}
+                  cursor-grab select-none rounded-sm border-t-[3px] transition-opacity
+                  ${auftrag.typ === 'buerozeit' ? 'bg-orange-100/80 border-t-orange-400' : `bg-white/85 ${STATUS_BORDER_T[auftrag.status]}`}
                   ${isDragging ? 'opacity-25' : ''}`}
     >
-      <span className={`shrink-0 w-2 h-2 rounded-full ${STATUS_DOT_COLORS[auftrag.status]}`} />
+      <span className={`shrink-0 w-2 h-2 rounded-full ${auftrag.typ === 'buerozeit' ? 'bg-orange-400' : STATUS_DOT_COLORS[auftrag.status]}`} />
       <span className="text-[11px] font-semibold text-slate-800 truncate leading-none min-w-0">
         {auftrag.titel}
       </span>
@@ -297,16 +297,21 @@ export default function WochenAnsicht({
                     if (cell.type === 'auftrag') {
                       const _ftRaw = isFeiertag(cell.auftrag.datum);
                       const ft = _ftRaw && (_ftRaw.includes('Fronleichnam') || _ftRaw.includes('Corpus')) ? null : _ftRaw;
+                      const isBuerozeit = cell.auftrag.typ === 'buerozeit';
                       return (
                         <td key={`a${cell.auftrag.id}`} colSpan={cell.colSpan}
                           className={`border-b border-r p-0 align-middle
-                                      ${cell.isFirst ? 'border-l border-l-slate-300' : ''}`}
-                          style={{
-                            backgroundImage: X_BG,
-                            backgroundRepeat: 'no-repeat',
-                            backgroundSize: '100% 100%',
-                            backgroundColor: ft ? '#fef9c3' : '#eceff1',
-                          }}>
+                                      ${cell.isFirst ? 'border-l border-l-slate-300' : ''}
+                                      ${isBuerozeit ? 'border-orange-200' : ''}`}
+                          style={isBuerozeit
+                            ? { backgroundColor: '#fff7ed' }  // orange-50, kein X
+                            : {
+                                backgroundImage: X_BG,
+                                backgroundRepeat: 'no-repeat',
+                                backgroundSize: '100% 100%',
+                                backgroundColor: ft ? '#fef9c3' : '#eceff1',
+                              }
+                          }>
                           <AuftragKarte
                             auftrag={cell.auftrag}
                             onClick={() => onAuftragClick(cell.auftrag)}

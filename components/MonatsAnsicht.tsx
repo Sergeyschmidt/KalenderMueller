@@ -139,15 +139,16 @@ export default function MonatsAnsicht({ datum, auftraege, urlaube, onTagClick }:
                       </div>
                     );
                   }
+                  const isBuero = e.auftrag.typ === 'buerozeit';
                   return (
                     <div key={e.key} className="flex items-start gap-1 text-[10px] leading-tight">
                       <span className={`mt-[2px] w-1.5 h-1.5 rounded-full shrink-0
-                        ${STATUS_DOT_COLORS[e.auftrag.status]}`} />
-                      <span className="truncate text-slate-700 min-w-0">
-                        <span className="font-semibold text-slate-900">
+                        ${isBuero ? 'bg-orange-400' : STATUS_DOT_COLORS[e.auftrag.status]}`} />
+                      <span className={`truncate min-w-0 ${isBuero ? 'text-orange-800' : 'text-slate-700'}`}>
+                        <span className={`font-semibold ${isBuero ? 'text-orange-900' : 'text-slate-900'}`}>
                           {kurzname(e.auftrag.mitarbeiter)}:
                         </span>{' '}
-                        {e.auftrag.titel}
+                        {isBuero ? 'Bürozeit' : e.auftrag.titel}
                       </span>
                     </div>
                   );

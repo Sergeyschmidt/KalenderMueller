@@ -50,6 +50,13 @@ export type MitarbeiterName = (typeof MITARBEITER)[number];
 
 export const STUNDEN = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16] as const;
 
+export type AuftragTyp = 'auftrag' | 'buerozeit';
+
+export const AUFTRAG_TYP_LABELS: Record<AuftragTyp, string> = {
+  auftrag:   'Auftrag / Termin',
+  buerozeit: 'Bürozeit',
+};
+
 export interface Auftrag {
   id: string;
   titel: string;
@@ -61,6 +68,7 @@ export interface Auftrag {
   start_stunde: number; // 7–16
   end_stunde: number;   // 8–17 (exklusiv; bei mehrtägigen Aufträgen: Endstunde am Enddatum)
   status: Status;
+  typ?: AuftragTyp;  // undefined = rückwärtskompatibel → wird als 'auftrag' behandelt
   created_at?: string;
   updated_at?: string;
 }
@@ -75,6 +83,7 @@ export interface AuftragFormData {
   start_stunde: number;
   end_stunde: number;
   status: Status;
+  typ: AuftragTyp;
 }
 
 export interface Urlaub {
