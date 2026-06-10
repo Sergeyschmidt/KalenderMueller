@@ -11,6 +11,7 @@ import {
   isSameMonth,
   isToday,
   getDay,
+  getISOWeek,
 } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -96,3 +97,17 @@ export function formatStunde(h: number): string {
 export function formatTagKopf(datum: Date): string {
   return format(datum, 'EEEE, dd. MMMM', { locale: de });
 }
+
+/** Alle Tage (YYYY-MM-DD) zwischen start und end (inklusive). */
+export function getDatesInRange(start: Date, end: Date): string[] {
+  const result: string[] = [];
+  const d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const e = new Date(end.getFullYear(),   end.getMonth(),   end.getDate());
+  while (d <= e) {
+    result.push(formatDatum(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return result;
+}
+
+export { startOfMonth, endOfMonth, getISOWeek };

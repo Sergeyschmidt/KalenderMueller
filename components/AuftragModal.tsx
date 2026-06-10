@@ -1,15 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Auftrag, MITARBEITER, STUNDEN, Status, STATUS_LABELS, AuftragFormData, AuftragTyp, AUFTRAG_TYP_LABELS } from '@/lib/types';
+import { Auftrag, STUNDEN, Status, STATUS_LABELS, AuftragFormData, AuftragTyp, AUFTRAG_TYP_LABELS } from '@/lib/types';
 import { formatStunde } from '@/lib/dateUtils';
 
 interface Props {
   auftrag?: Auftrag;
   prefill?: Partial<Auftrag>;
+  mitarbeiterNamen: string[];
   onSave: (data: Omit<Auftrag, 'id'>) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
+  isStandard?: boolean;
 }
 
 function todayStr() {
@@ -25,14 +27,14 @@ const STATUS_BTN: Record<Status, string> = {
   fertig:         'bg-green-500 text-white border-green-500',
 };
 
-export default function AuftragModal({ auftrag, prefill, onSave, onDelete, onClose }: Props) {
+export default function AuftragModal({ auftrag, prefill, mitarbeiterNamen, onSave, onDelete, onClose, isStandard }: Props) {
   const startDatum = auftrag?.datum ?? prefill?.datum ?? todayStr();
 
   const [form, setForm] = useState<AuftragFormData>(() => ({
     titel:        auftrag?.titel         ?? '',
     beschreibung: auftrag?.beschreibung  ?? '',
     kunde:        auftrag?.kunde         ?? '',
-    mitarbeiter:  auftrag?.mitarbeiter   ?? prefill?.mitarbeiter ?? MITARBEITER[0],
+    mitarbeiter:  auftrag?.mitarbeiter   ?? prefill?.mitarbeiter ?? mitarbeiterNamen[0] ?? '',
     datum:        startDatum,
     datum_bis:    auftrag?.datum_bis     ?? startDatum,
     start_stunde: auftrag?.start_stunde  ?? prefill?.start_stunde ?? 8,
@@ -74,9 +76,17 @@ export default function AuftragModal({ auftrag, prefill, onSave, onDelete, onClo
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         {/* Header */}
         <div className="bg-blue-900 px-5 py-4 text-white flex items-center justify-between">
-          <h2 className="font-semibold text-sm">
-            {auftrag ? 'Auftrag bearbeiten' : 'Neuer Auftrag'}
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-sm">
+              {auftrag ? 'Eintrag bearbeiten' : 'Neuer Auftrag'}
+            </h2>
+            {isStandard && (
+              <span className="text-[10px] bg-orange-500/80 border border-orange-400/50
+                               text-white px-2 py-0.5 rounded-full font-medium">
+                Standard
+              </span>
+            )}
+          </div>
           <button type="button" onClick={onClose}
             className="p-1 hover:bg-blue-800 rounded-lg transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -130,7 +140,7 @@ export default function AuftragModal({ auftrag, prefill, onSave, onDelete, onClo
             <select value={form.mitarbeiter}
               onChange={e => setForm(f => ({ ...f, mitarbeiter: e.target.value }))}
               className={inputCls}>
-              {MITARBEITER.map(ma => <option key={ma} value={ma}>{ma}</option>)}
+              {mitarbeiterNamen.map(ma => <option key={ma} value={ma}>{ma}</option>)}
             </select>
           </div>
 
@@ -263,7 +273,7 @@ export default function AuftragModal({ auftrag, prefill, onSave, onDelete, onClo
                   ${confirmDelete
                     ? 'bg-red-600 text-white hover:bg-red-700'
                     : 'bg-slate-100 text-slate-600 hover:bg-red-50 hover:text-red-700'}`}>
-                {confirmDelete ? 'Sicher?' : 'Löschen'}
+                {confirmDelete ? 'Sicher?' : isStandard ? 'Heute entfernen' : 'Löschen'}
               </button>
             )}
             <button type="button" onClick={onClose}

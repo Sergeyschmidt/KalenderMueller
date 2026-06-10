@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { MITARBEITER, Urlaub } from '@/lib/types';
+import { Urlaub, AbwesenheitsTyp, ABWESENHEITS_LABELS } from '@/lib/types';
 import { useKalenderStore } from '@/lib/store';
 
 interface Props {
   onClose: () => void;
+  mitarbeiterNamen: string[];
   onAddUrlaub: (urlaub: Omit<Urlaub, 'id'>) => Promise<void>;
   onDeleteUrlaub: (id: string) => Promise<void>;
 }
@@ -21,18 +22,32 @@ function urlaubDauer(u: Urlaub): number {
   return Math.round((bis.getTime() - von.getTime()) / 86_400_000) + 1;
 }
 
-export default function UrlaubModal({ onClose, onAddUrlaub, onDeleteUrlaub }: Props) {
+const TYP_BG_BORDER: Record<AbwesenheitsTyp, string> = {
+  urlaub:      'bg-orange-50 border-orange-200',
+  krankheit:   'bg-red-50 border-red-200',
+  militaer:    'bg-slate-50 border-slate-200',
+  zivilschutz: 'bg-blue-50 border-blue-200',
+};
+
+const TYP_TEXT: Record<AbwesenheitsTyp, string> = {
+  urlaub:      'text-orange-700',
+  krankheit:   'text-red-700',
+  militaer:    'text-slate-600',
+  zivilschutz: 'text-blue-700',
+};
+
+export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, onDeleteUrlaub }: Props) {
   const { urlaube, auftraege } = useKalenderStore();
 
   const [form, setForm] = useState({
-    mitarbeiter: MITARBEITER[0] as string,
-    datum_von: '',
-    datum_bis: '',
-    notiz: '',
+    mitarbeiter: mitarbeiterNamen[0] ?? '',
+    datum_von:   '',
+    datum_bis:   '',
+    typ:         'urlaub' as AbwesenheitsTyp,
+    notiz:       '',
   });
-  const [fehler, setFehler] = useState('');
-
-  const [saving, setSaving] = useState(false);
+  const [fehler, setFehler]   = useState('');
+  const [saving, setSaving]   = useState(false);
 
   const handleSave = async () => {
     if (!form.datum_von || !form.datum_bis) {
@@ -46,16 +61,17 @@ export default function UrlaubModal({ onClose, onAddUrlaub, onDeleteUrlaub }: Pr
     setSaving(true);
     await onAddUrlaub({
       mitarbeiter: form.mitarbeiter,
-      datum_von: form.datum_von,
-      datum_bis: form.datum_bis,
-      notiz: form.notiz.trim() || undefined,
+      datum_von:   form.datum_von,
+      datum_bis:   form.datum_bis,
+      typ:         form.typ,
+      notiz:       form.notiz.trim() || undefined,
     });
-    setForm({ mitarbeiter: MITARBEITER[0], datum_von: '', datum_bis: '', notiz: '' });
+    setForm({ mitarbeiter: mitarbeiterNamen[0] ?? '', datum_von: '', datum_bis: '', typ: 'urlaub', notiz: '' });
     setFehler('');
     setSaving(false);
   };
 
-  // Kollisions-Warnung: Aufträge im eingetragenen Urlaub-Zeitraum
+  // Kollisions-Warnung: Aufträge im eingetragenen Zeitraum
   const kollisionen =
     form.datum_von && form.datum_bis
       ? auftraege.filter(
@@ -81,7 +97,7 @@ export default function UrlaubModal({ onClose, onAddUrlaub, onDeleteUrlaub }: Pr
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <h2 className="font-semibold text-sm">Urlaub verwalten</h2>
+            <h2 className="font-semibold text-sm">Abwesenheiten verwalten</h2>
           </div>
           <button
             type="button"
@@ -98,7 +114,7 @@ export default function UrlaubModal({ onClose, onAddUrlaub, onDeleteUrlaub }: Pr
 
           {/* ── Neu eintragen ── */}
           <section>
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Neuen Urlaub eintragen</h3>
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">Neue Abwesenheit eintragen</h3>
             <div className="space-y-3">
 
               <div>
@@ -109,7 +125,21 @@ export default function UrlaubModal({ onClose, onAddUrlaub, onDeleteUrlaub }: Pr
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm
                              focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
-                  {MITARBEITER.map((ma) => <option key={ma} value={ma}>{ma}</option>)}
+                  {mitarbeiterNamen.map((ma) => <option key={ma} value={ma}>{ma}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Art der Abwesenheit</label>
+                <select
+                  value={form.typ}
+                  onChange={(e) => setForm((f) => ({ ...f, typ: e.target.value as AbwesenheitsTyp }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm
+                             focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  {(Object.entries(ABWESENHEITS_LABELS) as [AbwesenheitsTyp, string][]).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
                 </select>
               </div>
 
@@ -160,7 +190,7 @@ export default function UrlaubModal({ onClose, onAddUrlaub, onDeleteUrlaub }: Pr
                   <span>
                     <strong>{form.mitarbeiter}</strong> hat bereits{' '}
                     <strong>{kollisionen} {kollisionen === 1 ? 'Auftrag' : 'Aufträge'}</strong> in diesem
-                    Zeitraum. Diese werden in der Wochenansicht vom Urlaub überdeckt.
+                    Zeitraum. Diese werden in der Wochenansicht überdeckt.
                   </span>
                 </div>
               )}
@@ -178,7 +208,7 @@ export default function UrlaubModal({ onClose, onAddUrlaub, onDeleteUrlaub }: Pr
                 className="w-full py-2.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-60
                            text-white font-medium rounded-lg text-sm transition-colors"
               >
-                {saving ? 'Wird gespeichert…' : 'Urlaub eintragen'}
+                {saving ? 'Wird gespeichert…' : 'Abwesenheit eintragen'}
               </button>
             </div>
           </section>
@@ -186,7 +216,7 @@ export default function UrlaubModal({ onClose, onAddUrlaub, onDeleteUrlaub }: Pr
           {/* ── Übersicht bestehender Einträge ── */}
           <section>
             <h3 className="text-sm font-semibold text-slate-700 mb-3">
-              Eingetragene Urlaubszeiten
+              Eingetragene Abwesenheiten
               {sortedUrlaube.length > 0 && (
                 <span className="ml-2 text-xs font-normal text-slate-400">
                   ({sortedUrlaube.length})
@@ -196,42 +226,47 @@ export default function UrlaubModal({ onClose, onAddUrlaub, onDeleteUrlaub }: Pr
 
             {sortedUrlaube.length === 0 ? (
               <p className="text-sm text-slate-400 text-center py-4">
-                Noch keine Urlaubseinträge vorhanden.
+                Noch keine Einträge vorhanden.
               </p>
             ) : (
               <div className="space-y-2">
-                {sortedUrlaube.map((u) => (
-                  <div
-                    key={u.id}
-                    className="flex items-center justify-between bg-orange-50 border border-orange-200
-                               rounded-xl px-3 py-2.5"
-                  >
-                    <div>
-                      <div className="text-sm font-semibold text-slate-800">{u.mitarbeiter}</div>
-                      <div className="text-xs text-orange-700">
-                        {anzeigeDatum(u.datum_von)} – {anzeigeDatum(u.datum_bis)}
-                        <span className="ml-1.5 text-slate-400">
-                          ({urlaubDauer(u)} {urlaubDauer(u) === 1 ? 'Tag' : 'Tage'})
-                        </span>
-                        {u.notiz && (
-                          <span className="ml-2 italic text-slate-500">{u.notiz}</span>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteUrlaub(u.id)}
-                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50
-                                 rounded-lg transition-colors"
-                      title="Urlaub löschen"
+                {sortedUrlaube.map((u) => {
+                  const typ = u.typ ?? 'urlaub';
+                  return (
+                    <div
+                      key={u.id}
+                      className={`flex items-center justify-between border rounded-xl px-3 py-2.5
+                                  ${TYP_BG_BORDER[typ]}`}
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
+                      <div>
+                        <div className="text-sm font-semibold text-slate-800">{u.mitarbeiter}</div>
+                        <div className={`text-xs ${TYP_TEXT[typ]}`}>
+                          <span className="font-medium">{ABWESENHEITS_LABELS[typ]}</span>
+                          {' · '}
+                          {anzeigeDatum(u.datum_von)} – {anzeigeDatum(u.datum_bis)}
+                          <span className="ml-1.5 text-slate-400">
+                            ({urlaubDauer(u)} {urlaubDauer(u) === 1 ? 'Tag' : 'Tage'})
+                          </span>
+                          {u.notiz && (
+                            <span className="ml-2 italic text-slate-500">{u.notiz}</span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteUrlaub(u.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50
+                                   rounded-lg transition-colors"
+                        title="Eintrag löschen"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>

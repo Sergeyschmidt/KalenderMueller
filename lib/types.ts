@@ -86,10 +86,82 @@ export interface AuftragFormData {
   typ: AuftragTyp;
 }
 
+export interface Mitarbeiter {
+  id: string;
+  name: string;
+  reihenfolge: number;
+  is_active: boolean;
+  auto_buerozeit_start?: number | null;
+  auto_buerozeit_end?:   number | null;
+  geburtsdatum?:         string | null; // YYYY-MM-DD
+  eintrittsdatum?:       string | null; // YYYY-MM-DD
+  created_at?: string;
+}
+
+export interface JahresEreignis {
+  id: string;
+  datum: string; // YYYY-MM-DD (mit angezeigtem Jahr)
+  label: string; // z.B. "🎁 Schmidt" oder "🎉 Scussel (5J.)"
+  typ: 'geburtstag' | 'jubilaeum';
+}
+
+/** Fallback-Liste wenn die DB-Tabelle noch nicht existiert oder leer ist. */
+export const FALLBACK_MITARBEITER_LISTE: Mitarbeiter[] = [
+  { id: 'fb-scussel', name: 'Scussel',             reihenfolge: 1, is_active: true, auto_buerozeit_start: 7,    auto_buerozeit_end: 9    },
+  { id: 'fb-laabs',   name: 'Laabs',               reihenfolge: 2, is_active: true, auto_buerozeit_start: null, auto_buerozeit_end: null },
+  { id: 'fb-schmidt', name: 'Schmidt',             reihenfolge: 3, is_active: true, auto_buerozeit_start: 9,    auto_buerozeit_end: 11   },
+  { id: 'fb-rasekh',  name: 'Rasekh',              reihenfolge: 4, is_active: true, auto_buerozeit_start: null, auto_buerozeit_end: null },
+  { id: 'fb-mueller', name: 'Müller Heinz/Monika', reihenfolge: 5, is_active: true, auto_buerozeit_start: null, auto_buerozeit_end: null },
+  { id: 'fb-platz1',  name: 'Freier Platz 1',      reihenfolge: 6, is_active: true, auto_buerozeit_start: null, auto_buerozeit_end: null },
+  { id: 'fb-platz2',  name: 'Freier Platz 2',      reihenfolge: 7, is_active: true, auto_buerozeit_start: null, auto_buerozeit_end: null },
+];
+
+/** Gespeicherte Ausnahme: dieser Mitarbeiter hat an diesem Tag KEINE Standard-Bürozeit */
+export interface BueroAusnahme {
+  id: string;
+  mitarbeiter: string;
+  datum: string; // YYYY-MM-DD
+  created_at?: string;
+}
+
+export type AbwesenheitsTyp = 'urlaub' | 'krankheit' | 'militaer' | 'zivilschutz';
+
+export const ABWESENHEITS_LABELS: Record<AbwesenheitsTyp, string> = {
+  urlaub:      'Urlaub',
+  krankheit:   'Krankheit',
+  militaer:    'Militär',
+  zivilschutz: 'Zivilschutz',
+};
+
+/** Punkt-Farbe in MonatsAnsicht */
+export const ABWESENHEITS_DOT: Record<AbwesenheitsTyp, string> = {
+  urlaub:      'bg-orange-400',
+  krankheit:   'bg-red-400',
+  militaer:    'bg-slate-500',
+  zivilschutz: 'bg-blue-400',
+};
+
+/** Textfarbe (normal) */
+export const ABWESENHEITS_TEXT: Record<AbwesenheitsTyp, string> = {
+  urlaub:      'text-orange-700',
+  krankheit:   'text-red-700',
+  militaer:    'text-slate-600',
+  zivilschutz: 'text-blue-700',
+};
+
+/** Textfarbe (fett/Name) */
+export const ABWESENHEITS_BOLD: Record<AbwesenheitsTyp, string> = {
+  urlaub:      'text-orange-900',
+  krankheit:   'text-red-900',
+  militaer:    'text-slate-800',
+  zivilschutz: 'text-blue-900',
+};
+
 export interface Urlaub {
   id: string;
   mitarbeiter: string;
   datum_von: string; // YYYY-MM-DD
   datum_bis: string; // YYYY-MM-DD (inklusive)
+  typ?: AbwesenheitsTyp; // optional – fehlend = 'urlaub' (rückwärtskompatibel)
   notiz?: string;
 }

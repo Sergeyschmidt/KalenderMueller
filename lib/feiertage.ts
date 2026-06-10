@@ -1,17 +1,21 @@
 /**
- * Feiertage Kanton Aargau (Klingnau) — finale Liste
+ * Gesetzliche Feiertage – Bezirk Zurzach, Kanton Aargau, Schweiz
  *
- * Fixe Tage:
- *   1. Jan  Neujahr
- *   2. Jan  Berchtoldstag
- *   1. Aug  Nationalfeiertag
- *   1. Nov  Allerheiligen
- *  25. Dez  Weihnachten
- *  26. Dez  Stephanstag
+ * Fixe Feiertage:
+ *   01.01  Neujahr
+ *   02.01  Berchtoldstag
+ *   01.08  Bundesfeiertag
+ *   01.11  Allerheiligen
+ *   25.12  Weihnachten
+ *   26.12  Stephanstag
  *
- * Bewegliche Tage (relativ zu Ostersonntag):
- *   Ostern − 2  Karfreitag
- *   Ostern +39  Auffahrt (Christi Himmelfahrt)
+ * Bewegliche Feiertage (relativ zu Ostersonntag):
+ *   Ostern − 2   Karfreitag
+ *   Ostern + 39  Auffahrt (Christi Himmelfahrt)
+ *   Ostern + 60  Fronleichnam
+ *
+ * Ausdrücklich KEINE Feiertage im Bezirk Zurzach:
+ *   Ostermontag, Pfingstmontag, 1. Mai, Mariä Himmelfahrt (15.08), Mariä Empfängnis (08.12)
  */
 
 function ostersonntag(jahr: number): Date {
@@ -53,26 +57,19 @@ function berechneFeiertage(jahr: number): Map<string, string> {
   // Fixe Feiertage
   f.set(`${jahr}-01-01`, 'Neujahr');
   f.set(`${jahr}-01-02`, 'Berchtoldstag');
-  f.set(`${jahr}-08-01`, 'Nationalfeiertag');
+  f.set(`${jahr}-08-01`, 'Bundesfeiertag');
   f.set(`${jahr}-11-01`, 'Allerheiligen');
   f.set(`${jahr}-12-25`, 'Weihnachten');
   f.set(`${jahr}-12-26`, 'Stephanstag');
 
   // Bewegliche Feiertage
-  f.set(fmt(addTage(ostern, -2)),  'Karfreitag');
-  f.set(fmt(addTage(ostern, 39)),  'Auffahrt');
+  f.set(fmt(addTage(ostern, -2)), 'Karfreitag');
+  f.set(fmt(addTage(ostern, 39)), 'Auffahrt');
+  f.set(fmt(addTage(ostern, 60)), 'Fronleichnam');
 
   return f;
 }
 
-// Harte Blocklist – diese Namen werden NIEMALS als Feiertag zurückgegeben,
-// unabhängig davon was im Cache steht.
-const KEIN_FEIERTAG = new Set([
-  'Fronleichnam',
-  'Corpus Christi',
-]);
-
-// Cache wird bei jedem Modulstart frisch angelegt.
 const cache = new Map<number, Map<string, string>>();
 
 function getJahr(jahr: number): Map<string, string> {
@@ -80,11 +77,8 @@ function getJahr(jahr: number): Map<string, string> {
   return cache.get(jahr)!;
 }
 
-/** Gibt den Feiertagsnamen für 'YYYY-MM-DD' zurück, oder null.
- *  Gibt IMMER null zurück für Tage in KEIN_FEIERTAG. */
+/** Gibt den Feiertagsnamen für 'YYYY-MM-DD' zurück, oder null. */
 export function isFeiertag(datum: string): string | null {
   const jahr = parseInt(datum.slice(0, 4), 10);
-  const name = getJahr(jahr).get(datum) ?? null;
-  if (name !== null && KEIN_FEIERTAG.has(name)) return null;
-  return name;
+  return getJahr(jahr).get(datum) ?? null;
 }

@@ -1,28 +1,47 @@
 'use client';
 
+import { useState } from 'react';
 import { useDroppable, useDraggable } from '@dnd-kit/core';
 import {
-  MITARBEITER, STUNDEN, Auftrag, Urlaub,
+  STUNDEN, Auftrag, Urlaub, Mitarbeiter,
+  AbwesenheitsTyp, ABWESENHEITS_LABELS,
   STATUS_BORDER_T, STATUS_DOT_COLORS,
+  JahresEreignis,
 } from '@/lib/types';
 import { formatAnzeige, parseDatum, WOCHENTAGE_KURZ } from '@/lib/dateUtils';
-import { isFeiertag as _isFeiertag } from '@/lib/feiertage';
-
-// Lokale Absicherung: Fronleichnam darf NIEMALS als Feiertag erscheinen.
-const VERBOTEN = new Set(['Fronleichnam', 'Corpus Christi']);
-function isFeiertag(datum: string): string | null {
-  const n = _isFeiertag(datum);
-  return n && VERBOTEN.has(n) ? null : n;
-}
+import { isFeiertag } from '@/lib/feiertage';
 
 // ── Hintergründe ──────────────────────────────────────────────────────────────
 const X_BG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' preserveAspectRatio='none'%3E%3Cline x1='0' y1='0' x2='100%25' y2='100%25' stroke='%23b0bec5' stroke-width='2'/%3E%3Cline x1='100%25' y1='0' x2='0' y2='100%25' stroke='%23b0bec5' stroke-width='2'/%3E%3C%2Fsvg%3E")`;
 
-const URLAUB_BG = `repeating-linear-gradient(
-  45deg,
-  #ffedd5, #ffedd5 6px,
-  #fed7aa 6px, #fed7aa 13px
-)`;
+function urlaubBg(typ: AbwesenheitsTyp): string {
+  const farben: Record<AbwesenheitsTyp, [string, string]> = {
+    urlaub:      ['#ffedd5', '#fed7aa'],
+    krankheit:   ['#fee2e2', '#fca5a5'],
+    militaer:    ['#f1f5f9', '#cbd5e1'],
+    zivilschutz: ['#dbeafe', '#93c5fd'],
+  };
+  const [c1, c2] = farben[typ];
+  return `repeating-linear-gradient(45deg, ${c1}, ${c1} 6px, ${c2} 6px, ${c2} 13px)`;
+}
+
+function urlaubBorderCls(typ: AbwesenheitsTyp): string {
+  return ({
+    urlaub:      'border-orange-300 border-l-orange-400',
+    krankheit:   'border-red-300 border-l-red-400',
+    militaer:    'border-slate-300 border-l-slate-400',
+    zivilschutz: 'border-blue-300 border-l-blue-400',
+  } as Record<AbwesenheitsTyp, string>)[typ];
+}
+
+function urlaubTextCls(typ: AbwesenheitsTyp): string {
+  return ({
+    urlaub:      'text-orange-800',
+    krankheit:   'text-red-800',
+    militaer:    'text-slate-600',
+    zivilschutz: 'text-blue-800',
+  } as Record<AbwesenheitsTyp, string>)[typ];
+}
 
 // ── Hilfsfunktionen ───────────────────────────────────────────────────────────
 function todayStr(): string {
@@ -31,10 +50,12 @@ function todayStr(): string {
 }
 
 function kurzMA(name: string): string {
-  if (name === 'Müller Heinz/Monika') return 'Müller\nH/M';
-  if (name === 'Freier Platz 1')      return 'Frei 1';
-  if (name === 'Freier Platz 2')      return 'Frei 2';
-  return name;
+  if (name.length <= 9) return name;
+  const slashIdx = name.indexOf('/');
+  if (slashIdx > 0) return name.slice(0, slashIdx) + '\n' + name.slice(slashIdx + 1);
+  const lastSpace = name.lastIndexOf(' ');
+  if (lastSpace > 0) return name.slice(0, lastSpace) + '\n' + name.slice(lastSpace + 1);
+  return name.slice(0, 8) + '…';
 }
 
 const STUNDEN_ARR = STUNDEN as readonly number[];
@@ -75,7 +96,7 @@ function colSpanFuerAuftrag(
 // ── Zell-Typen ────────────────────────────────────────────────────────────────
 type CellData =
   | { type: 'auftrag'; auftrag: Auftrag; colSpan: number; isFirst: boolean }
-  | { type: 'urlaub';  datum: string;    colSpan: number                   }
+  | { type: 'urlaub';  datum: string;    colSpan: number; urlaubTyp: AbwesenheitsTyp }
   | { type: 'empty';   datum: string;    stunde: number;  isFirst: boolean }
   | null;
 
@@ -84,6 +105,8 @@ function computeRow(
   wochentage: string[],
   auftraege: Auftrag[],
   urlaube: Urlaub[],
+  autoBuerozeit: { start: number; end: number } | null,
+  ausnahmenSet: Set<string>,
 ): CellData[] {
   const row: CellData[] = [];
   let colsToSkip = 0;
@@ -93,15 +116,21 @@ function computeRow(
 
     // Urlaub – nur wenn kein laufendes colSpan aus Vortag
     if (colsToSkip === 0) {
-      const hatUrlaub = urlaube.some(
+      const hatUrlaub = urlaube.find(
         u => u.mitarbeiter === ma && u.datum_von <= datum && u.datum_bis >= datum
       );
       if (hatUrlaub) {
-        row.push({ type: 'urlaub', datum, colSpan: STUNDEN.length });
+        row.push({ type: 'urlaub', datum, colSpan: STUNDEN.length, urlaubTyp: hatUrlaub.typ ?? 'urlaub' });
         for (let i = 1; i < STUNDEN.length; i++) row.push(null);
         continue;
       }
     }
+
+    // Auto-Bürozeit: nur Mo–Fr, kein Feiertag, keine Ausnahme
+    const autoAktiv =
+      autoBuerozeit !== null &&
+      isFeiertag(datum) === null &&
+      !ausnahmenSet.has(`${ma}|${datum}`);
 
     const tagAuftraege = auftraege.filter(a => a.mitarbeiter === ma && a.datum === datum);
     let hi = 0;
@@ -122,6 +151,21 @@ function computeRow(
       if (auftrag) {
         const colSpan = colSpanFuerAuftrag(auftrag, wochentage, di, hi);
         row.push({ type: 'auftrag', auftrag, colSpan, isFirst });
+        colsToSkip = colSpan - 1;
+      } else if (autoAktiv && autoBuerozeit && stunde === autoBuerozeit.start) {
+        // Bürozeit direkt rendern – garantiert sichtbar unabhängig von virtuelleAuftraege
+        const colSpan = autoBuerozeit.end - autoBuerozeit.start;
+        const vAuftrag: Auftrag = {
+          id:           `virtual::${ma}::${datum}`,
+          titel:        'Büro',
+          mitarbeiter:  ma,
+          datum,
+          start_stunde: autoBuerozeit.start,
+          end_stunde:   autoBuerozeit.end,
+          status:       'erfasst',
+          typ:          'buerozeit',
+        };
+        row.push({ type: 'auftrag', auftrag: vAuftrag, colSpan, isFirst });
         colsToSkip = colSpan - 1;
       } else {
         row.push({ type: 'empty', datum, stunde, isFirst });
@@ -151,13 +195,18 @@ function AuftragKarte({ auftrag, onClick }: { auftrag: Auftrag; onClick: () => v
       {...attributes}
       onClick={e => { e.stopPropagation(); onClick(); }}
       title={`${auftrag.titel}${subtitle ? ' · ' + subtitle : ''}`}
-      className={`h-full w-full flex items-center gap-1 px-1.5 overflow-hidden
+      className={`h-full w-full flex items-center overflow-hidden
                   cursor-grab select-none rounded-sm border-t-[3px] transition-opacity
-                  ${auftrag.typ === 'buerozeit' ? 'bg-orange-100/80 border-t-orange-400' : `bg-white/85 ${STATUS_BORDER_T[auftrag.status]}`}
+                  ${auftrag.typ === 'buerozeit'
+                    ? 'bg-orange-100/80 border-t-orange-400 gap-0.5 px-0.5'
+                    : `bg-white/85 ${STATUS_BORDER_T[auftrag.status]} gap-1 px-1.5`}
                   ${isDragging ? 'opacity-25' : ''}`}
     >
       <span className={`shrink-0 w-2 h-2 rounded-full ${auftrag.typ === 'buerozeit' ? 'bg-orange-400' : STATUS_DOT_COLORS[auftrag.status]}`} />
-      <span className="text-[11px] font-semibold text-slate-800 truncate leading-none min-w-0">
+      <span className={`leading-none min-w-0 overflow-hidden font-semibold
+        ${auftrag.typ === 'buerozeit'
+          ? 'text-[10px] text-orange-700'
+          : 'text-[11px] text-slate-800 truncate'}`}>
         {auftrag.titel}
       </span>
     </div>
@@ -196,25 +245,34 @@ interface Props {
   wochentage: string[];
   auftraege: Auftrag[];
   urlaube: Urlaub[];
+  mitarbeiterNamen: string[];
+  mitarbeiterListe: Mitarbeiter[];
+  ausnahmenSet: Set<string>;
+  jahresEreignisse?: JahresEreignis[];
   onZelleClick: (datum: string, mitarbeiter: string, stunde: number) => void;
   onAuftragClick: (auftrag: Auftrag) => void;
+  onMitarbeiterRename?: (altName: string, neuName: string) => void;
 }
 
 export default function WochenAnsicht({
-  wochentage, auftraege, urlaube, onZelleClick, onAuftragClick,
+  wochentage, auftraege, urlaube, mitarbeiterNamen, mitarbeiterListe, ausnahmenSet,
+  jahresEreignisse = [],
+  onZelleClick, onAuftragClick, onMitarbeiterRename,
 }: Props) {
   const heute         = todayStr();
   const feiertagNamen = wochentage.map(d => isFeiertag(d));
+  const [editingMA,  setEditingMA]  = useState<string | null>(null);
+  const [editMAName, setEditMAName] = useState('');
 
   return (
     <div className="h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
       <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
         <table
           className="border-collapse w-full"
-          style={{ tableLayout: 'fixed', minWidth: '720px', height: '100%' }}
+          style={{ tableLayout: 'fixed', minWidth: '640px', height: '100%' }}
         >
           <colgroup>
-            <col style={{ width: '96px' }} />
+            <col style={{ width: '72px' }} />
             {Array.from({ length: 50 }).map((_, i) => <col key={i} />)}
           </colgroup>
 
@@ -225,16 +283,16 @@ export default function WochenAnsicht({
               <th
                 rowSpan={2}
                 className="border border-slate-400 bg-slate-800 text-white text-xs
-                           font-semibold text-center align-middle px-1 leading-snug"
+                           font-semibold text-center align-middle px-1 leading-snug
+                           sticky left-0 z-20"
               >
                 Mitarbeiter
               </th>
               {wochentage.map((datum, di) => {
-                // HARTE SPERRE direkt im Rendering – Fronleichnam NIEMALS orange
-                let ft = feiertagNamen[di];
-                if (ft && (ft.includes('Fronleichnam') || ft.includes('Corpus'))) ft = null;
+                const ft    = feiertagNamen[di];
                 const isHeu = datum === heute;
-                const bg    = ft ? 'bg-amber-700' : isHeu ? 'bg-blue-500' : 'bg-blue-900';
+                const bg       = ft ? 'bg-amber-700' : isHeu ? 'bg-blue-500' : 'bg-blue-900';
+                const dayEvents = jahresEreignisse.filter(e => e.datum === datum);
                 return (
                   <th key={datum} colSpan={10}
                     className={`border border-slate-400 text-center leading-none py-1.5 text-white ${bg}`}>
@@ -242,6 +300,19 @@ export default function WochenAnsicht({
                       {WOCHENTAGE_KURZ[di]}&nbsp;{formatAnzeige(parseDatum(datum))}
                     </div>
                     {ft && <div className="text-[9px] italic font-normal opacity-90 mt-px">{ft}</div>}
+                    {dayEvents.length > 0 && (
+                      <div className="flex flex-wrap items-center justify-center gap-0.5 mt-1">
+                        {dayEvents.map(e => (
+                          <span key={e.id}
+                            className={`text-[9px] px-1.5 py-px rounded-full font-semibold leading-snug
+                              ${e.typ === 'geburtstag'
+                                ? 'bg-purple-200/30 text-purple-100 ring-1 ring-purple-300/40'
+                                : 'bg-green-200/30 text-green-100 ring-1 ring-green-300/40'}`}>
+                            {e.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </th>
                 );
               })}
@@ -264,18 +335,70 @@ export default function WochenAnsicht({
 
           {/* ── Datenzeilen ── */}
           <tbody>
-            {MITARBEITER.map((ma, mi) => {
-              const cells = computeRow(ma, wochentage, auftraege, urlaube);
+            {mitarbeiterNamen.map((ma, mi) => {
+              const maInfo = mitarbeiterListe.find(m => m.name === ma);
+              const autoBuerozeit =
+                (maInfo?.auto_buerozeit_start != null && maInfo?.auto_buerozeit_end != null)
+                  ? { start: maInfo.auto_buerozeit_start!, end: maInfo.auto_buerozeit_end! }
+                  : null;
+              const cells = computeRow(ma, wochentage, auftraege, urlaube, autoBuerozeit, ausnahmenSet);
 
               return (
                 <tr key={ma} style={{ height: '0' }}
                   className={mi % 2 === 1 ? 'bg-slate-50/40' : ''}>
 
-                  {/* Mitarbeitername */}
-                  <td className="border border-slate-300 bg-slate-700 text-white text-[11px]
-                                 font-semibold text-center px-1 align-middle whitespace-pre-line
-                                 leading-tight">
-                    {kurzMA(ma)}
+                  {/* Mitarbeitername – klicken zum Umbenennen */}
+                  <td
+                    className="border border-slate-300 bg-slate-700 p-0 relative overflow-hidden group sticky left-0 z-10"
+                    style={{ cursor: 'text' }}
+                    title={`${ma} – klicken zum Umbenennen`}
+                    onClick={() => {
+                      if (editingMA === null) {
+                        setEditingMA(ma);
+                        setEditMAName(ma);
+                      }
+                    }}
+                  >
+                    {/* Absolut positioniert → beeinflusst Zeilenhöhe NICHT */}
+                    <div className="absolute inset-0 flex items-center justify-center px-1.5 overflow-hidden">
+                      {editingMA === ma ? (
+                        <input
+                          autoFocus
+                          value={editMAName}
+                          onChange={e => setEditMAName(e.target.value)}
+                          onBlur={() => {
+                            const v = editMAName.trim();
+                            if (v && v !== ma) onMitarbeiterRename?.(ma, v);
+                            setEditingMA(null);
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              const v = editMAName.trim();
+                              if (v && v !== ma) onMitarbeiterRename?.(ma, v);
+                              setEditingMA(null);
+                            }
+                            if (e.key === 'Escape') setEditingMA(null);
+                          }}
+                          onClick={e => e.stopPropagation()}
+                          className="w-full bg-slate-600 text-white text-center text-[11px]
+                                     font-semibold outline-none rounded px-1 py-0.5
+                                     border border-slate-400 focus:border-blue-400"
+                        />
+                      ) : (
+                        <span className="text-[11px] font-semibold text-white text-center
+                                         leading-tight whitespace-pre-line">
+                          {kurzMA(ma)}
+                        </span>
+                      )}
+                    </div>
+                    {/* Stift-Icon beim Hover */}
+                    {editingMA !== ma && (
+                      <span className="absolute bottom-0.5 right-0.5 text-[8px] text-white/40
+                                       opacity-0 group-hover:opacity-100 transition-opacity
+                                       pointer-events-none select-none leading-none">
+                        ✎
+                      </span>
+                    )}
                   </td>
 
                   {/* Stunden-Zellen */}
@@ -285,26 +408,29 @@ export default function WochenAnsicht({
                     if (cell.type === 'urlaub') {
                       return (
                         <td key={`u${ci}`} colSpan={cell.colSpan}
-                          className="border-b border-r border-l-2 border-orange-300
-                                     border-l-orange-400 text-center align-middle"
-                          style={{ background: URLAUB_BG }}
-                          title={`${ma}: Urlaub`}>
-                          <span className="text-[11px] font-bold text-orange-800">Urlaub</span>
+                          className={`border-b border-r border-l-2 relative overflow-hidden
+                                      ${urlaubBorderCls(cell.urlaubTyp)}`}
+                          style={{ background: urlaubBg(cell.urlaubTyp) }}
+                          title={`${ma}: ${ABWESENHEITS_LABELS[cell.urlaubTyp]}`}>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className={`text-[11px] font-bold ${urlaubTextCls(cell.urlaubTyp)}`}>
+                              {ABWESENHEITS_LABELS[cell.urlaubTyp]}
+                            </span>
+                          </div>
                         </td>
                       );
                     }
 
                     if (cell.type === 'auftrag') {
-                      const _ftRaw = isFeiertag(cell.auftrag.datum);
-                      const ft = _ftRaw && (_ftRaw.includes('Fronleichnam') || _ftRaw.includes('Corpus')) ? null : _ftRaw;
+                      const ft = isFeiertag(cell.auftrag.datum);
                       const isBuerozeit = cell.auftrag.typ === 'buerozeit';
                       return (
                         <td key={`a${cell.auftrag.id}`} colSpan={cell.colSpan}
-                          className={`border-b border-r p-0 align-middle
+                          className={`border-b border-r p-0 relative overflow-hidden
                                       ${cell.isFirst ? 'border-l border-l-slate-300' : ''}
                                       ${isBuerozeit ? 'border-orange-200' : ''}`}
                           style={isBuerozeit
-                            ? { backgroundColor: '#fff7ed' }  // orange-50, kein X
+                            ? { backgroundColor: '#fff7ed' }
                             : {
                                 backgroundImage: X_BG,
                                 backgroundRepeat: 'no-repeat',
@@ -312,10 +438,13 @@ export default function WochenAnsicht({
                                 backgroundColor: ft ? '#fef9c3' : '#eceff1',
                               }
                           }>
-                          <AuftragKarte
-                            auftrag={cell.auftrag}
-                            onClick={() => onAuftragClick(cell.auftrag)}
-                          />
+                          {/* Absolut → beeinflusst Zeilenhöhe NICHT */}
+                          <div className="absolute inset-0 overflow-hidden">
+                            <AuftragKarte
+                              auftrag={cell.auftrag}
+                              onClick={() => onAuftragClick(cell.auftrag)}
+                            />
+                          </div>
                         </td>
                       );
                     }
@@ -329,7 +458,7 @@ export default function WochenAnsicht({
                         stunde={cell.stunde}
                         isFirst={cell.isFirst}
                         isToday={cell.datum === heute}
-                        isHoliday={(() => { const n = isFeiertag(cell.datum); return !!n && !n.includes('Fronleichnam') && !n.includes('Corpus'); })()}
+                        isHoliday={!!isFeiertag(cell.datum)}
                         onClick={() => onZelleClick(cell.datum, ma, cell.stunde)}
                       />
                     );
