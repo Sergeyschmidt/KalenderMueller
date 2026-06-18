@@ -39,17 +39,18 @@ export default function MonatsAnsicht({ datum, auftraege, urlaube, jahresEreigni
     <div className="flex-1 min-h-0 flex flex-col p-4">
       {/* Spaltenköpfe: KW-Spalte + 7 Wochentage */}
       <div className="shrink-0 grid grid-cols-[1.75rem_repeat(7,1fr)] mb-1">
-        <div className="text-center text-[10px] font-semibold py-2 text-slate-400 select-none">KW</div>
+        <div className="text-center text-[10px] font-semibold py-2 text-slate-400 select-none" />
         {WOCHENTAGE.map((t, i) => (
           <div key={t} className={`text-center text-xs font-semibold py-2
-            ${i >= 5 ? 'text-slate-400' : 'text-slate-500'}`}>
+            ${i >= 5 ? 'text-slate-400' : 'text-slate-500'}
+            ${i < 6 ? 'border-r-[3px] border-r-slate-300' : ''}`}>
             {t}
           </div>
         ))}
       </div>
 
       {/* Kalender-Grid – flex-1 füllt verfügbaren Raum, 1fr verteilt Höhe gleichmäßig auf Zeilen */}
-      <div className="flex-1 min-h-0 grid grid-cols-[1.75rem_repeat(7,1fr)] gap-px bg-slate-200 rounded-xl overflow-hidden border border-slate-200"
+      <div className="flex-1 min-h-0 grid grid-cols-[1.75rem_repeat(7,1fr)] gap-y-px gap-x-[3px] bg-slate-300 rounded-xl overflow-hidden border border-slate-300"
            style={{ gridAutoRows: '1fr' }}>
         {wochen.map((woche, wi) => {
           const ersterTag = woche.find(t => t !== null) ?? null;
@@ -86,7 +87,7 @@ export default function MonatsAnsicht({ datum, auftraege, urlaube, jahresEreigni
 
                 type Eintrag =
                   | { art: 'ereignis'; key: string; ereignis: JahresEreignis }
-                  | { art: 'urlaub';   key: string; name: string; typ: AbwesenheitsTyp }
+                  | { art: 'urlaub';   key: string; name: string; typ: AbwesenheitsTyp; start_zeit?: string | null; end_zeit?: string | null }
                   | { art: 'auftrag';  key: string; auftrag: Auftrag };
 
                 const tagEreignisse = jahresEreignisse.filter(e => e.datum === tagStr);
@@ -98,10 +99,12 @@ export default function MonatsAnsicht({ datum, auftraege, urlaube, jahresEreigni
                     ereignis: e,
                   })),
                   ...tagUrlaube.map((u) => ({
-                    art:  'urlaub' as const,
-                    key:  u.id,
-                    name: u.mitarbeiter,
-                    typ:  (u.typ ?? 'urlaub') as AbwesenheitsTyp,
+                    art:        'urlaub' as const,
+                    key:        u.id,
+                    name:       u.mitarbeiter,
+                    typ:        (u.typ ?? 'urlaub') as AbwesenheitsTyp,
+                    start_zeit: u.start_zeit,
+                    end_zeit:   u.end_zeit,
                   })),
                   ...tagAuftraege.map((a) => ({
                     art:     'auftrag' as const,
@@ -166,12 +169,15 @@ export default function MonatsAnsicht({ datum, auftraege, urlaube, jahresEreigni
                           );
                         }
                         if (e.art === 'urlaub') {
+                          const zeitInfo = e.start_zeit && e.end_zeit
+                            ? ` (${e.start_zeit.slice(0, 5)}–${e.end_zeit.slice(0, 5)})`
+                            : '';
                           return (
                             <div key={e.key} className="flex items-start gap-1 text-[10px] leading-tight">
                               <span className={`mt-[2px] w-1.5 h-1.5 rounded-full shrink-0 ${ABWESENHEITS_DOT[e.typ]}`} />
                               <span className={`truncate min-w-0 ${ABWESENHEITS_TEXT[e.typ]}`}>
                                 <span className={`font-semibold ${ABWESENHEITS_BOLD[e.typ]}`}>{kurzname(e.name)}:</span>
-                                {' '}{ABWESENHEITS_LABELS[e.typ]}
+                                {' '}{ABWESENHEITS_LABELS[e.typ]}{zeitInfo}
                               </span>
                             </div>
                           );

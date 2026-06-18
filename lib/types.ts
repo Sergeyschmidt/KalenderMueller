@@ -62,7 +62,8 @@ export interface Auftrag {
   titel: string;
   beschreibung?: string;
   kunde?: string;
-  mitarbeiter: string;
+  mitarbeiter: string; // primärer Mitarbeiter – rückwärtskompatibel, immer = mitarbeiter_liste[0]
+  mitarbeiter_liste?: string[] | null; // alle zugewiesenen Mitarbeiter; fehlend/leer = nur `mitarbeiter`
   datum: string;      // Startdatum YYYY-MM-DD
   datum_bis?: string; // Enddatum YYYY-MM-DD (nur bei mehrtägigen Aufträgen)
   start_stunde: number; // 7–16
@@ -73,11 +74,18 @@ export interface Auftrag {
   updated_at?: string;
 }
 
+/** Liefert alle zugewiesenen Mitarbeiter eines Auftrags – fällt auf `mitarbeiter` zurück
+ *  wenn `mitarbeiter_liste` (noch) nicht gesetzt ist (ältere, einfach zugewiesene Aufträge). */
+export function getAuftragMitarbeiterListe(a: Auftrag): string[] {
+  if (a.mitarbeiter_liste && a.mitarbeiter_liste.length > 0) return a.mitarbeiter_liste;
+  return [a.mitarbeiter];
+}
+
 export interface AuftragFormData {
   titel: string;
   beschreibung: string;
   kunde: string;
-  mitarbeiter: string;
+  mitarbeiterListe: string[];
   datum: string;
   datum_bis: string;
   start_stunde: number;
@@ -124,44 +132,66 @@ export interface BueroAusnahme {
   created_at?: string;
 }
 
-export type AbwesenheitsTyp = 'urlaub' | 'krankheit' | 'militaer' | 'zivilschutz';
+export type AbwesenheitsTyp = 'urlaub' | 'krankheit' | 'militaer' | 'zivilschutz' | 'betriebsferien' | 'uebrige';
 
 export const ABWESENHEITS_LABELS: Record<AbwesenheitsTyp, string> = {
-  urlaub:      'Urlaub',
-  krankheit:   'Krankheit',
-  militaer:    'Militär',
-  zivilschutz: 'Zivilschutz',
+  urlaub:         'Urlaub',
+  krankheit:      'Krankheit',
+  militaer:       'Militär',
+  zivilschutz:    'Zivilschutz',
+  betriebsferien: 'Betriebsferien',
+  uebrige:        'Übrige',
 };
+
+/** Sichtbare Typen im Formular – 'uebrige' bleibt nur für Rückwärtskompatibilität bestehender Einträge */
+export const ABWESENHEITS_TYPEN_SICHTBAR: AbwesenheitsTyp[] = [
+  'urlaub', 'krankheit', 'militaer', 'zivilschutz', 'betriebsferien',
+];
 
 /** Punkt-Farbe in MonatsAnsicht */
 export const ABWESENHEITS_DOT: Record<AbwesenheitsTyp, string> = {
-  urlaub:      'bg-orange-400',
-  krankheit:   'bg-red-400',
-  militaer:    'bg-slate-500',
-  zivilschutz: 'bg-blue-400',
+  urlaub:         'bg-orange-400',
+  krankheit:      'bg-red-400',
+  militaer:       'bg-slate-500',
+  zivilschutz:    'bg-blue-400',
+  betriebsferien: 'bg-green-500',
+  uebrige:        'bg-stone-400',
 };
 
 /** Textfarbe (normal) */
 export const ABWESENHEITS_TEXT: Record<AbwesenheitsTyp, string> = {
-  urlaub:      'text-orange-700',
-  krankheit:   'text-red-700',
-  militaer:    'text-slate-600',
-  zivilschutz: 'text-blue-700',
+  urlaub:         'text-orange-700',
+  krankheit:      'text-red-700',
+  militaer:       'text-slate-600',
+  zivilschutz:    'text-blue-700',
+  betriebsferien: 'text-green-700',
+  uebrige:        'text-stone-600',
 };
 
 /** Textfarbe (fett/Name) */
 export const ABWESENHEITS_BOLD: Record<AbwesenheitsTyp, string> = {
-  urlaub:      'text-orange-900',
-  krankheit:   'text-red-900',
-  militaer:    'text-slate-800',
-  zivilschutz: 'text-blue-900',
+  urlaub:         'text-orange-900',
+  krankheit:      'text-red-900',
+  militaer:       'text-slate-800',
+  zivilschutz:    'text-blue-900',
+  betriebsferien: 'text-green-900',
+  uebrige:        'text-stone-800',
 };
 
 export interface Urlaub {
   id: string;
-  mitarbeiter: string;
+  mitarbeiter: string; // primärer Mitarbeiter – immer = mitarbeiter_liste[0]
+  mitarbeiter_liste?: string[] | null; // alle zugewiesenen Mitarbeiter; fehlend/leer = nur `mitarbeiter`
   datum_von: string; // YYYY-MM-DD
   datum_bis: string; // YYYY-MM-DD (inklusive)
   typ?: AbwesenheitsTyp; // optional – fehlend = 'urlaub' (rückwärtskompatibel)
   notiz?: string;
+  start_zeit?: string | null; // HH:MM – null/undefined = ganztägig
+  end_zeit?: string | null;   // HH:MM – null/undefined = ganztägig
+}
+
+/** Liefert alle zugewiesenen Mitarbeiter – fällt auf `mitarbeiter` zurück für ältere Einträge. */
+export function getUrlaubMitarbeiterListe(u: Urlaub): string[] {
+  if (u.mitarbeiter_liste && u.mitarbeiter_liste.length > 0) return u.mitarbeiter_liste;
+  return [u.mitarbeiter];
 }

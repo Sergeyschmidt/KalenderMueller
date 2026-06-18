@@ -10,6 +10,36 @@ import {
 } from '@/lib/supabase';
 import { formatStunde } from '@/lib/dateUtils';
 
+// ── Jubiläums-Hilfsfunktionen ─────────────────────────────────────────────────
+
+function geburtstagIstHeute(geburtsdatum: string | null | undefined): boolean {
+  if (!geburtsdatum) return false;
+  const p = geburtsdatum.split('-');
+  if (p.length !== 3) return false;
+  const h = new Date();
+  return Number(p[1]) === h.getMonth() + 1 && Number(p[2]) === h.getDate();
+}
+
+interface JubilaeumInfo {
+  istHeute:      boolean; // Tag & Monat stimmen mit heute überein
+  jahre:         number;  // Anzahl vollendeter Dienstjahre
+  istMeilenstein: boolean; // Vielfaches von 5 (5J, 10J, 15J …)
+}
+
+function jubilaeumStatus(eintrittsdatum: string | null | undefined): JubilaeumInfo | null {
+  if (!eintrittsdatum) return null;
+  const p = eintrittsdatum.split('-');
+  if (p.length !== 3) return null;
+  const heute = new Date();
+  const jahre = heute.getFullYear() - Number(p[0]);
+  if (jahre <= 0) return null;
+  return {
+    istHeute:       Number(p[1]) === heute.getMonth() + 1 && Number(p[2]) === heute.getDate(),
+    jahre,
+    istMeilenstein: jahre % 5 === 0,
+  };
+}
+
 export default function MitarbeiterModal({ onClose }: { onClose: () => void }) {
   const {
     mitarbeiter,
@@ -112,7 +142,11 @@ export default function MitarbeiterModal({ onClose }: { onClose: () => void }) {
   };
 
   // ── Zeile rendern ─────────────────────────────────────────────────────────
-  const renderRow = (m: Mitarbeiter, idx: number, list: Mitarbeiter[]) => (
+  const renderRow = (m: Mitarbeiter, idx: number, list: Mitarbeiter[]) => {
+    const jub     = jubilaeumStatus(m.eintrittsdatum);
+    const gebHeute = geburtstagIstHeute(m.geburtsdatum);
+
+    return (
     <div
       key={m.id}
       className={`rounded-xl border p-3 space-y-2 transition-opacity
@@ -141,7 +175,31 @@ export default function MitarbeiterModal({ onClose }: { onClose: () => void }) {
             className="flex-1 text-left px-2 py-1 rounded-lg text-sm font-semibold
                        text-slate-800 hover:bg-slate-100 transition-colors"
           >
-            {m.name}
+            <span className="inline-flex items-center gap-1.5 flex-wrap">
+              {m.name}
+
+              {/* Geburtstag heute */}
+              {gebHeute && (
+                <span title="Heute Geburtstag!" className="text-base leading-none select-none">🎂</span>
+              )}
+
+              {/* Dienstjubiläum heute */}
+              {jub?.istHeute && (
+                <span
+                  title={`${jub.jahre} Jahr${jub.jahre !== 1 ? 'e' : ''} im Betrieb`}
+                  className="text-base leading-none select-none"
+                >💼</span>
+              )}
+
+              {/* Gold-Badge nur bei Vielfachen von 5 */}
+              {jub?.istHeute && jub.istMeilenstein && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold
+                                 bg-yellow-400 text-yellow-900 px-1.5 py-0.5 rounded-full
+                                 ring-1 ring-yellow-500/60 select-none">
+                  🏆 {jub.jahre}J. Jubiläum!
+                </span>
+              )}
+            </span>
             <span className="ml-1 text-[10px] text-slate-400 font-normal">(klicken zum Umbenennen)</span>
           </button>
         )}
@@ -252,7 +310,8 @@ export default function MitarbeiterModal({ onClose }: { onClose: () => void }) {
         )}
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

@@ -1,13 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Urlaub, AbwesenheitsTyp, ABWESENHEITS_LABELS } from '@/lib/types';
+import {
+  Urlaub, AbwesenheitsTyp, ABWESENHEITS_LABELS,
+  ABWESENHEITS_TYPEN_SICHTBAR, getUrlaubMitarbeiterListe,
+} from '@/lib/types';
 import { useKalenderStore } from '@/lib/store';
 
 interface Props {
   onClose: () => void;
   mitarbeiterNamen: string[];
   onAddUrlaub: (urlaub: Omit<Urlaub, 'id'>) => Promise<void>;
+  onUpdateUrlaub: (id: string, urlaub: Omit<Urlaub, 'id'>) => Promise<void>;
   onDeleteUrlaub: (id: string) => Promise<void>;
 }
 
@@ -23,33 +27,77 @@ function urlaubDauer(u: Urlaub): number {
 }
 
 const TYP_BG_BORDER: Record<AbwesenheitsTyp, string> = {
-  urlaub:      'bg-orange-50 border-orange-200',
-  krankheit:   'bg-red-50 border-red-200',
-  militaer:    'bg-slate-50 border-slate-200',
-  zivilschutz: 'bg-blue-50 border-blue-200',
+  urlaub:         'bg-orange-50 border-orange-200',
+  krankheit:      'bg-red-50 border-red-200',
+  militaer:       'bg-slate-50 border-slate-200',
+  zivilschutz:    'bg-blue-50 border-blue-200',
+  betriebsferien: 'bg-green-50 border-green-200',
+  uebrige:        'bg-stone-50 border-stone-200',
 };
 
 const TYP_TEXT: Record<AbwesenheitsTyp, string> = {
-  urlaub:      'text-orange-700',
-  krankheit:   'text-red-700',
-  militaer:    'text-slate-600',
-  zivilschutz: 'text-blue-700',
+  urlaub:         'text-orange-700',
+  krankheit:      'text-red-700',
+  militaer:       'text-slate-600',
+  zivilschutz:    'text-blue-700',
+  betriebsferien: 'text-green-700',
+  uebrige:        'text-stone-600',
 };
 
-export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, onDeleteUrlaub }: Props) {
+export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, onUpdateUrlaub, onDeleteUrlaub }: Props) {
   const { urlaube, auftraege } = useKalenderStore();
 
-  const [form, setForm] = useState({
-    mitarbeiter: mitarbeiterNamen[0] ?? '',
+  const leeresFormular = {
+    mitarbeiterListe: mitarbeiterNamen.length > 0 ? [mitarbeiterNamen[0]] : [] as string[],
     datum_von:   '',
     datum_bis:   '',
     typ:         'urlaub' as AbwesenheitsTyp,
     notiz:       '',
-  });
-  const [fehler, setFehler]   = useState('');
-  const [saving, setSaving]   = useState(false);
+    ganztaegig:  true,
+    start_zeit:  '',
+    end_zeit:    '',
+  };
+
+  const [form, setForm]           = useState(leeresFormular);
+  const [fehler, setFehler]       = useState('');
+  const [saving, setSaving]       = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const toggleMitarbeiter = (ma: string) => {
+    setForm(f => ({
+      ...f,
+      mitarbeiterListe: f.mitarbeiterListe.includes(ma)
+        ? f.mitarbeiterListe.filter(x => x !== ma)
+        : [...f.mitarbeiterListe, ma],
+    }));
+  };
+
+  const startEdit = (u: Urlaub) => {
+    setEditingId(u.id);
+    setForm({
+      mitarbeiterListe: getUrlaubMitarbeiterListe(u),
+      datum_von:        u.datum_von,
+      datum_bis:        u.datum_bis,
+      typ:              u.typ ?? 'urlaub',
+      notiz:            u.notiz ?? '',
+      ganztaegig:       !u.start_zeit,
+      start_zeit:       u.start_zeit ?? '',
+      end_zeit:         u.end_zeit ?? '',
+    });
+    setFehler('');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(leeresFormular);
+    setFehler('');
+  };
 
   const handleSave = async () => {
+    if (form.mitarbeiterListe.length === 0) {
+      setFehler('Bitte mindestens einen Mitarbeiter auswählen.');
+      return;
+    }
     if (!form.datum_von || !form.datum_bis) {
       setFehler('Von- und Bis-Datum sind Pflichtfelder.');
       return;
@@ -58,27 +106,43 @@ export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, on
       setFehler('Das Bis-Datum muss nach dem Von-Datum liegen.');
       return;
     }
+    if (!form.ganztaegig && (!form.start_zeit || !form.end_zeit)) {
+      setFehler('Bitte Start- und Endzeit angeben.');
+      return;
+    }
+    if (!form.ganztaegig && form.start_zeit >= form.end_zeit) {
+      setFehler('Die Endzeit muss nach der Startzeit liegen.');
+      return;
+    }
     setSaving(true);
-    await onAddUrlaub({
-      mitarbeiter: form.mitarbeiter,
-      datum_von:   form.datum_von,
-      datum_bis:   form.datum_bis,
-      typ:         form.typ,
-      notiz:       form.notiz.trim() || undefined,
-    });
-    setForm({ mitarbeiter: mitarbeiterNamen[0] ?? '', datum_von: '', datum_bis: '', typ: 'urlaub', notiz: '' });
+    const payload: Omit<Urlaub, 'id'> = {
+      mitarbeiter:      form.mitarbeiterListe[0],
+      mitarbeiter_liste: form.mitarbeiterListe,
+      datum_von:        form.datum_von,
+      datum_bis:        form.datum_bis,
+      typ:              form.typ,
+      notiz:            form.notiz.trim() || undefined,
+      start_zeit:       form.ganztaegig ? null : form.start_zeit,
+      end_zeit:         form.ganztaegig ? null : form.end_zeit,
+    };
+    if (editingId) {
+      await onUpdateUrlaub(editingId, payload);
+    } else {
+      await onAddUrlaub(payload);
+    }
+    setForm(leeresFormular);
+    setEditingId(null);
     setFehler('');
     setSaving(false);
   };
 
-  // Kollisions-Warnung: Aufträge im eingetragenen Zeitraum
+  // Kollisions-Warnung: Aufträge ausgewählter Mitarbeiter im eingetragenen Zeitraum
   const kollisionen =
-    form.datum_von && form.datum_bis
-      ? auftraege.filter(
-          (a) =>
-            a.mitarbeiter === form.mitarbeiter &&
-            a.datum >= form.datum_von &&
-            a.datum <= form.datum_bis
+    form.datum_von && form.datum_bis && form.mitarbeiterListe.length > 0
+      ? auftraege.filter(a =>
+          form.mitarbeiterListe.includes(a.mitarbeiter) &&
+          a.datum >= form.datum_von &&
+          a.datum <= form.datum_bis
         ).length
       : 0;
 
@@ -112,23 +176,40 @@ export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, on
 
         <div className="overflow-y-auto flex-1 p-5 space-y-6">
 
-          {/* ── Neu eintragen ── */}
+          {/* ── Neu eintragen / Bearbeiten ── */}
           <section>
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Neue Abwesenheit eintragen</h3>
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">
+              {editingId ? 'Abwesenheit bearbeiten' : 'Neue Abwesenheit eintragen'}
+            </h3>
             <div className="space-y-3">
 
+              {/* Mitarbeiter – Mehrfachauswahl */}
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Mitarbeiter</label>
-                <select
-                  value={form.mitarbeiter}
-                  onChange={(e) => setForm((f) => ({ ...f, mitarbeiter: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm
-                             focus:outline-none focus:ring-2 focus:ring-orange-500"
-                >
-                  {mitarbeiterNamen.map((ma) => <option key={ma} value={ma}>{ma}</option>)}
-                </select>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Mitarbeiter
+                  {form.mitarbeiterListe.length > 1 && (
+                    <span className="ml-1.5 text-slate-400 font-normal">
+                      ({form.mitarbeiterListe.length} ausgewählt)
+                    </span>
+                  )}
+                </label>
+                <div className="border border-slate-300 rounded-lg divide-y divide-slate-100 max-h-36 overflow-y-auto">
+                  {mitarbeiterNamen.map((ma) => (
+                    <label key={ma}
+                      className="flex items-center gap-2.5 px-3 py-1.5 text-sm cursor-pointer hover:bg-slate-50">
+                      <input
+                        type="checkbox"
+                        checked={form.mitarbeiterListe.includes(ma)}
+                        onChange={() => toggleMitarbeiter(ma)}
+                        className="w-4 h-4 rounded border-slate-300 accent-orange-600"
+                      />
+                      <span className="text-slate-700">{ma}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
+              {/* Art der Abwesenheit */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Art der Abwesenheit</label>
                 <select
@@ -137,8 +218,8 @@ export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, on
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm
                              focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
-                  {(Object.entries(ABWESENHEITS_LABELS) as [AbwesenheitsTyp, string][]).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
+                  {ABWESENHEITS_TYPEN_SICHTBAR.map(key => (
+                    <option key={key} value={key}>{ABWESENHEITS_LABELS[key]}</option>
                   ))}
                 </select>
               </div>
@@ -167,6 +248,44 @@ export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, on
                 </div>
               </div>
 
+              {/* Ganztägig-Toggle */}
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.ganztaegig}
+                  onChange={(e) => setForm((f) => ({ ...f, ganztaegig: e.target.checked, start_zeit: '', end_zeit: '' }))}
+                  className="w-4 h-4 rounded border-slate-300 accent-orange-600"
+                />
+                <span className="text-sm font-medium text-slate-700">Ganztägig</span>
+              </label>
+
+              {/* Zeitfelder – nur wenn NICHT ganztägig */}
+              {!form.ganztaegig && (
+                <div className="grid grid-cols-2 gap-3 pl-6">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Von (Uhrzeit)</label>
+                    <input
+                      type="time"
+                      value={form.start_zeit}
+                      onChange={(e) => setForm((f) => ({ ...f, start_zeit: e.target.value }))}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm
+                                 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Bis (Uhrzeit)</label>
+                    <input
+                      type="time"
+                      value={form.end_zeit}
+                      min={form.start_zeit || undefined}
+                      onChange={(e) => setForm((f) => ({ ...f, end_zeit: e.target.value }))}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm
+                                 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Notiz (optional)</label>
                 <input
@@ -188,7 +307,10 @@ export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, on
                       d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                   </svg>
                   <span>
-                    <strong>{form.mitarbeiter}</strong> hat bereits{' '}
+                    {form.mitarbeiterListe.length === 1
+                      ? <><strong>{form.mitarbeiterListe[0]}</strong> hat bereits</>
+                      : <>Ausgewählte Mitarbeiter haben insgesamt</>
+                    }{' '}
                     <strong>{kollisionen} {kollisionen === 1 ? 'Auftrag' : 'Aufträge'}</strong> in diesem
                     Zeitraum. Diese werden in der Wochenansicht überdeckt.
                   </span>
@@ -201,15 +323,28 @@ export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, on
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="w-full py-2.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-60
-                           text-white font-medium rounded-lg text-sm transition-colors"
-              >
-                {saving ? 'Wird gespeichert…' : 'Abwesenheit eintragen'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving || form.mitarbeiterListe.length === 0}
+                  className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-60
+                             text-white font-medium rounded-lg text-sm transition-colors"
+                >
+                  {saving ? 'Wird gespeichert…' : editingId ? 'Änderungen speichern' : 'Abwesenheit eintragen'}
+                </button>
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    disabled={saving}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-60
+                               text-slate-600 font-medium rounded-lg text-sm transition-colors"
+                  >
+                    Abbrechen
+                  </button>
+                )}
+              </div>
             </div>
           </section>
 
@@ -231,17 +366,27 @@ export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, on
             ) : (
               <div className="space-y-2">
                 {sortedUrlaube.map((u) => {
-                  const typ = u.typ ?? 'urlaub';
+                  const typ  = u.typ ?? 'urlaub';
+                  const malist = getUrlaubMitarbeiterListe(u);
                   return (
                     <div
                       key={u.id}
                       className={`flex items-center justify-between border rounded-xl px-3 py-2.5
-                                  ${TYP_BG_BORDER[typ]}`}
+                                  ${TYP_BG_BORDER[typ]} ${editingId === u.id ? 'ring-2 ring-orange-400' : ''}`}
                     >
-                      <div>
-                        <div className="text-sm font-semibold text-slate-800">{u.mitarbeiter}</div>
+                      <div className="min-w-0 flex-1 pr-2">
+                        <div className="text-sm font-semibold text-slate-800 truncate">
+                          {malist.length === 1
+                            ? malist[0]
+                            : `${malist[0]} +${malist.length - 1}`}
+                        </div>
                         <div className={`text-xs ${TYP_TEXT[typ]}`}>
                           <span className="font-medium">{ABWESENHEITS_LABELS[typ]}</span>
+                          {u.start_zeit && u.end_zeit && (
+                            <span className="ml-1 font-semibold">
+                              {u.start_zeit.slice(0, 5)}–{u.end_zeit.slice(0, 5)}
+                            </span>
+                          )}
                           {' · '}
                           {anzeigeDatum(u.datum_von)} – {anzeigeDatum(u.datum_bis)}
                           <span className="ml-1.5 text-slate-400">
@@ -252,18 +397,32 @@ export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, on
                           )}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => onDeleteUrlaub(u.id)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50
-                                   rounded-lg transition-colors"
-                        title="Eintrag löschen"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(u)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50
+                                     rounded-lg transition-colors"
+                          title="Eintrag bearbeiten"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteUrlaub(u.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50
+                                     rounded-lg transition-colors"
+                          title="Eintrag löschen"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

@@ -12,7 +12,7 @@ import {
   DragStartEvent,
 } from '@dnd-kit/core';
 import { useKalenderStore } from '@/lib/store';
-import { Auftrag, Urlaub, BueroAusnahme, Mitarbeiter, STUNDEN, FALLBACK_MITARBEITER_LISTE, JahresEreignis } from '@/lib/types';
+import { Auftrag, Urlaub, BueroAusnahme, Mitarbeiter, STUNDEN, FALLBACK_MITARBEITER_LISTE, JahresEreignis, getAuftragMitarbeiterListe } from '@/lib/types';
 import {
   getWochentage,
   formatDatum,
@@ -37,6 +37,7 @@ import {
   dbUpdateAuftrag,
   dbDeleteAuftrag,
   dbCreateUrlaub,
+  dbUpdateUrlaub,
   dbDeleteUrlaub,
   dbCreateBueroAusnahme,
   dbUpdateMitarbeiter,
@@ -49,6 +50,7 @@ import {
   getVirtuelleAuftraege,
   isVirtuellerEintrag,
   parseVirtuelleId,
+  extractAuftragId,
 } from '@/lib/buerozeiten';
 import WochenAnsicht    from './WochenAnsicht';
 import MonatsAnsicht    from './MonatsAnsicht';
@@ -75,6 +77,7 @@ export default function KalenderApp() {
     updateAuftrag,
     deleteAuftrag,
     addUrlaub,
+    updateUrlaub,
     deleteUrlaub,
     addBueroAusnahme,
     updateMitarbeiterItem,
@@ -243,10 +246,14 @@ export default function KalenderApp() {
         if (p.length === 3) {
           const jahre = year - Number(p[0]);
           if (jahre > 0) {
+            // Immer: Jahrestag im Kalender anzeigen
+            const istMeilenstein = jahre % 5 === 0;
             events.push({
               id:    `jul-${ma.id}`,
               datum: `${year}-${p[1]}-${p[2]}`,
-              label: `🎉 ${jahre}J. Jubiläum ${kurzname}`,
+              label: istMeilenstein
+                ? `🏆 ${jahre}J. Jubiläum ${kurzname}`
+                : `💼 Eintritt ${kurzname}`,
               typ:   'jubilaeum',
             });
           }
@@ -282,8 +289,9 @@ export default function KalenderApp() {
 
   // ── Drag & Drop ───────────────────────────────────────────────────────────
   const handleDragStart = (e: DragStartEvent) => {
-    if (isVirtuellerEintrag(String(e.active.id))) return;
-    const a = auftraege.find(x => x.id === e.active.id);
+    const realId = extractAuftragId(String(e.active.id));
+    if (isVirtuellerEintrag(realId)) return;
+    const a = auftraege.find(x => x.id === realId);
     if (a) setActiveAuftrag(a);
   };
 
@@ -292,9 +300,10 @@ export default function KalenderApp() {
       setActiveAuftrag(null);
       const { active, over } = e;
       if (!over) return;
-      if (isVirtuellerEintrag(String(active.id))) return;
+      const realId = extractAuftragId(String(active.id));
+      if (isVirtuellerEintrag(realId)) return;
 
-      const auftrag = auftraege.find(a => a.id === active.id);
+      const auftrag = auftraege.find(a => a.id === realId);
       if (!auftrag) return;
 
       const { datum: neuDatum, mitarbeiter: neuMA, stunde: neuStart } = over.data.current as {
@@ -338,7 +347,7 @@ export default function KalenderApp() {
         const slotStunde = STUNDEN_ARR[neuHi];
         if (alleAuftraege.some(a =>
           !isVirtuellerEintrag(a.id) && a.id !== auftrag.id &&
-          a.mitarbeiter === neuMA &&
+          getAuftragMitarbeiterListe(a).includes(neuMA) &&
           a.datum <= slotDatum && (a.datum_bis || a.datum) >= slotDatum &&
           a.start_stunde <= slotStunde && a.end_stunde > slotStunde
         )) return;
@@ -348,11 +357,12 @@ export default function KalenderApp() {
       }
 
       const updates: Partial<Auftrag> = {
-        mitarbeiter:  neuMA,
-        datum:        neuDatum,
-        datum_bis:    neuDatumBis !== neuDatum ? neuDatumBis : undefined,
-        start_stunde: neuStart,
-        end_stunde:   neuEnd,
+        mitarbeiter:       neuMA,
+        mitarbeiter_liste: [neuMA],
+        datum:             neuDatum,
+        datum_bis:         neuDatumBis !== neuDatum ? neuDatumBis : undefined,
+        start_stunde:      neuStart,
+        end_stunde:        neuEnd,
       };
       updateAuftrag(auftrag.id, updates);
       if (dbBereit) dbUpdateAuftrag(auftrag.id, updates);
@@ -474,6 +484,17 @@ export default function KalenderApp() {
         }
       } catch (err) {
         console.error('handleAddUrlaub: Fehler beim DB-Insert:', err);
+      }
+    }
+  };
+
+  const handleUpdateUrlaub = async (id: string, updates: Omit<Urlaub, 'id'>) => {
+    updateUrlaub(id, updates);
+    if (dbBereit) {
+      try {
+        await dbUpdateUrlaub(id, updates);
+      } catch (err) {
+        console.error('handleUpdateUrlaub: Fehler beim DB-Update:', err);
       }
     }
   };
@@ -730,6 +751,7 @@ export default function KalenderApp() {
           onClose={() => setUrlaubModalOffen(false)}
           mitarbeiterNamen={aktiveMitarbeiterNamen}
           onAddUrlaub={handleAddUrlaub}
+          onUpdateUrlaub={handleUpdateUrlaub}
           onDeleteUrlaub={handleDeleteUrlaub}
         />
       )}

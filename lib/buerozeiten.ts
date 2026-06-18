@@ -1,4 +1,5 @@
 import type { Auftrag, Mitarbeiter } from './types';
+import { getAuftragMitarbeiterListe } from './types';
 import { isFeiertag } from './feiertage';
 
 // ── ID-Schema: "virtual::Schmidt::2026-06-05" ─────────────────────────────────
@@ -20,6 +21,17 @@ export function parseVirtuelleId(
   const sepIdx = rest.indexOf('::');
   if (sepIdx === -1) return null;
   return { mitarbeiter: rest.slice(0, sepIdx), datum: rest.slice(sepIdx + 2) };
+}
+
+/**
+ * Löst aus einer Drag-id die echte Auftrag-id heraus. Für Aufträge mit mehreren
+ * Mitarbeitern wird in WochenAnsicht pro Zeile die id "<auftragId>::<mitarbeiter>"
+ * verwendet (dnd-kit braucht eindeutige ids je gerenderter Karte) – hier wird das
+ * wieder auf die ursprüngliche Auftrag-id zurückgeführt. Virtuelle ids bleiben unverändert.
+ */
+export function extractAuftragId(dragId: string): string {
+  if (isVirtuellerEintrag(dragId)) return dragId;
+  return dragId.split('::')[0];
 }
 
 /**
@@ -65,7 +77,7 @@ export function getVirtuelleAuftraege(
       // Echter Eintrag für denselben Slot bereits vorhanden?
       const vorhanden = auftraege.some(
         a =>
-          a.mitarbeiter  === ma.name &&
+          getAuftragMitarbeiterListe(a).includes(ma.name) &&
           a.datum        === datum   &&
           a.start_stunde === start   &&
           a.end_stunde   === end     &&

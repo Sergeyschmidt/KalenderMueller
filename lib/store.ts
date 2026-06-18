@@ -19,6 +19,7 @@ interface KalenderStore {
 
   setUrlaube:        (urlaube: Urlaub[]) => void;
   addUrlaub:         (urlaub: Urlaub) => void;
+  updateUrlaub:      (id: string, updates: Partial<Urlaub>) => void;
   deleteUrlaub:      (id: string) => void;
 
   setBueroAusnahmen: (ausnahmen: BueroAusnahme[]) => void;
@@ -69,6 +70,8 @@ export const useKalenderStore = create<KalenderStore>()(
           if (s.urlaube.some(u => u.id === urlaub.id)) return s;
           return { urlaube: [...s.urlaube, urlaub] };
         }),
+      updateUrlaub: (id, updates) =>
+        set((s) => ({ urlaube: s.urlaube.map(u => u.id === id ? { ...u, ...updates } : u) })),
       deleteUrlaub: (id) =>
         set((s) => ({ urlaube: s.urlaube.filter(u => u.id !== id) })),
 
@@ -98,6 +101,27 @@ export const useKalenderStore = create<KalenderStore>()(
     }),
     {
       name: 'mueller-kalender-v2',
+      version: 1,
+      // Migration v0→v1: Urlaube und Aufträge von Einzel-String auf mitarbeiter_liste-Array.
+      // Läuft einmalig beim ersten Start nach dem Update; danach speichert Zustand v1.
+      migrate: (persistedState: unknown, version: number) => {
+        const s = (persistedState ?? {}) as Record<string, unknown>;
+        if (version < 1) {
+          if (Array.isArray(s.urlaube)) {
+            s.urlaube = (s.urlaube as Record<string, unknown>[]).map(u => ({
+              ...u,
+              mitarbeiter_liste: u.mitarbeiter_liste ?? [u.mitarbeiter],
+            }));
+          }
+          if (Array.isArray(s.auftraege)) {
+            s.auftraege = (s.auftraege as Record<string, unknown>[]).map(a => ({
+              ...a,
+              mitarbeiter_liste: a.mitarbeiter_liste ?? [a.mitarbeiter],
+            }));
+          }
+        }
+        return s;
+      },
       partialize: (s) => ({
         isAuthenticated: s.isAuthenticated,
         auftraege:       s.auftraege,

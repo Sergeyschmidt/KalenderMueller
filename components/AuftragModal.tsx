@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Auftrag, STUNDEN, Status, STATUS_LABELS, AuftragFormData, AuftragTyp, AUFTRAG_TYP_LABELS } from '@/lib/types';
+import { Auftrag, STUNDEN, Status, STATUS_LABELS, AuftragFormData, AuftragTyp, AUFTRAG_TYP_LABELS, getAuftragMitarbeiterListe } from '@/lib/types';
 import { formatStunde } from '@/lib/dateUtils';
 
 interface Props {
@@ -34,7 +34,11 @@ export default function AuftragModal({ auftrag, prefill, mitarbeiterNamen, onSav
     titel:        auftrag?.titel         ?? '',
     beschreibung: auftrag?.beschreibung  ?? '',
     kunde:        auftrag?.kunde         ?? '',
-    mitarbeiter:  auftrag?.mitarbeiter   ?? prefill?.mitarbeiter ?? mitarbeiterNamen[0] ?? '',
+    mitarbeiterListe: auftrag
+      ? getAuftragMitarbeiterListe(auftrag)
+      : prefill?.mitarbeiter
+        ? [prefill.mitarbeiter]
+        : mitarbeiterNamen[0] ? [mitarbeiterNamen[0]] : [],
     datum:        startDatum,
     datum_bis:    auftrag?.datum_bis     ?? startDatum,
     start_stunde: auftrag?.start_stunde  ?? prefill?.start_stunde ?? 8,
@@ -48,22 +52,33 @@ export default function AuftragModal({ auftrag, prefill, mitarbeiterNamen, onSav
   );
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const toggleMitarbeiter = (ma: string) => {
+    setForm(f => ({
+      ...f,
+      mitarbeiterListe: f.mitarbeiterListe.includes(ma)
+        ? f.mitarbeiterListe.filter(x => x !== ma)
+        : [...f.mitarbeiterListe, ma],
+    }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.titel.trim()) return;
+    if (form.mitarbeiterListe.length === 0) return;
     if (!mehrtaegig && form.end_stunde <= form.start_stunde) return;
 
     onSave({
-      titel:        form.titel.trim(),
-      beschreibung: form.beschreibung.trim() || undefined,
-      kunde:        form.kunde.trim()        || undefined,
-      mitarbeiter:  form.mitarbeiter,
-      datum:        form.datum,
-      datum_bis:    mehrtaegig && form.datum_bis > form.datum ? form.datum_bis : undefined,
-      start_stunde: form.start_stunde,
-      end_stunde:   form.end_stunde,
-      status:       form.status,
-      typ:          form.typ,
+      titel:             form.titel.trim(),
+      beschreibung:      form.beschreibung.trim() || undefined,
+      kunde:             form.kunde.trim()        || undefined,
+      mitarbeiter:       form.mitarbeiterListe[0],
+      mitarbeiter_liste: form.mitarbeiterListe,
+      datum:             form.datum,
+      datum_bis:         mehrtaegig && form.datum_bis > form.datum ? form.datum_bis : undefined,
+      start_stunde:      form.start_stunde,
+      end_stunde:        form.end_stunde,
+      status:            form.status,
+      typ:               form.typ,
     });
   };
 
@@ -134,14 +149,30 @@ export default function AuftragModal({ auftrag, prefill, mitarbeiterNamen, onSav
               placeholder="Kundenname" className={inputCls} />
           </div>
 
-          {/* Mitarbeiter */}
+          {/* Mitarbeiter (Mehrfachauswahl) */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Mitarbeiter</label>
-            <select value={form.mitarbeiter}
-              onChange={e => setForm(f => ({ ...f, mitarbeiter: e.target.value }))}
-              className={inputCls}>
-              {mitarbeiterNamen.map(ma => <option key={ma} value={ma}>{ma}</option>)}
-            </select>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              Mitarbeiter {form.mitarbeiterListe.length > 1 && (
+                <span className="text-slate-400 font-normal">({form.mitarbeiterListe.length} ausgewählt)</span>
+              )}
+            </label>
+            <div className="border border-slate-300 rounded-lg divide-y divide-slate-100 max-h-40 overflow-y-auto">
+              {mitarbeiterNamen.map(ma => (
+                <label key={ma}
+                  className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer hover:bg-slate-50">
+                  <input
+                    type="checkbox"
+                    checked={form.mitarbeiterListe.includes(ma)}
+                    onChange={() => toggleMitarbeiter(ma)}
+                    className="w-4 h-4 rounded border-slate-300 accent-blue-600"
+                  />
+                  <span className="text-slate-700">{ma}</span>
+                </label>
+              ))}
+            </div>
+            {form.mitarbeiterListe.length === 0 && (
+              <p className="text-xs text-red-600 mt-1">Bitte mindestens einen Mitarbeiter auswählen.</p>
+            )}
           </div>
 
           {/* Mehrtägig-Toggle */}
@@ -282,8 +313,10 @@ export default function AuftragModal({ auftrag, prefill, mitarbeiterNamen, onSav
               Abbrechen
             </button>
             <button type="submit"
+              disabled={form.mitarbeiterListe.length === 0}
               className="flex-1 py-2 px-4 bg-blue-900 text-white rounded-lg text-sm
-                         font-medium hover:bg-blue-800 transition-colors">
+                         font-medium hover:bg-blue-800 disabled:opacity-50 disabled:hover:bg-blue-900
+                         transition-colors">
               Speichern
             </button>
           </div>
