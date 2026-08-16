@@ -106,11 +106,11 @@ export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, on
       setFehler('Das Bis-Datum muss nach dem Von-Datum liegen.');
       return;
     }
-    if (!form.ganztaegig && (!form.start_zeit || !form.end_zeit)) {
-      setFehler('Bitte Start- und Endzeit angeben.');
+    if (!form.ganztaegig && !form.start_zeit) {
+      setFehler('Bitte eine Startzeit angeben.');
       return;
     }
-    if (!form.ganztaegig && form.start_zeit >= form.end_zeit) {
+    if (!form.ganztaegig && form.end_zeit && form.start_zeit >= form.end_zeit) {
       setFehler('Die Endzeit muss nach der Startzeit liegen.');
       return;
     }
@@ -122,8 +122,8 @@ export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, on
       datum_bis:        form.datum_bis,
       typ:              form.typ,
       notiz:            form.notiz.trim() || undefined,
-      start_zeit:       form.ganztaegig ? null : form.start_zeit,
-      end_zeit:         form.ganztaegig ? null : form.end_zeit,
+      start_zeit:       form.ganztaegig ? null : (form.start_zeit || null),
+      end_zeit:         form.ganztaegig ? null : (form.end_zeit   || null),
     };
     if (editingId) {
       await onUpdateUrlaub(editingId, payload);
@@ -273,7 +273,7 @@ export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, on
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Bis (Uhrzeit)</label>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Bis (Uhrzeit, optional)</label>
                     <input
                       type="time"
                       value={form.end_zeit}

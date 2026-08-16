@@ -155,6 +155,18 @@ function computeRow(
       u => getUrlaubMitarbeiterListe(u).includes(ma) && u.datum_von <= datum && u.datum_bis >= datum && !!u.start_zeit
     ) ?? null;
 
+    // Mittlere Tage + Endtag ohne Endzeit → als ganztägig rendern
+    if (stundenweisenU && colsToSkip === 0) {
+      const sIsingle = stundenweisenU.datum_von === stundenweisenU.datum_bis;
+      const sIsStart = datum === stundenweisenU.datum_von;
+      const sIsEnd   = datum === stundenweisenU.datum_bis;
+      if (!sIsingle && !sIsStart && (!sIsEnd || !stundenweisenU.end_zeit)) {
+        row.push({ type: 'urlaub', datum, colSpan: STUNDEN.length, urlaubTyp: stundenweisenU.typ ?? 'urlaub', urlaubObj: stundenweisenU });
+        for (let i = 1; i < STUNDEN.length; i++) row.push(null);
+        continue;
+      }
+    }
+
     // Nur reguläre Aufträge – Bürozeiten werden separat als Overlay gerendert
     const tagAuftraege = auftraege.filter(
       a => getAuftragMitarbeiterListe(a).includes(ma) && a.datum === datum && a.typ !== 'buerozeit'
@@ -167,16 +179,32 @@ function computeRow(
 
       const stunde = STUNDEN[hi];
 
-      // Stundenweiser Urlaub – beginnt an der berechneten Startstunde
-      if (stundenweisenU && stundenweisenU.start_zeit && stundenweisenU.end_zeit) {
-        const startIdx = parseZeitAlsStundeIdx(stundenweisenU.start_zeit, false);
-        if (hi === startIdx) {
+      // Zeitbasierte Abwesenheit: Starttag oder eintägig, bzw. Endtag mit Endzeit
+      if (stundenweisenU && stundenweisenU.start_zeit) {
+        const sIsingle = stundenweisenU.datum_von === stundenweisenU.datum_bis;
+        const sIsStart = datum === stundenweisenU.datum_von;
+        const sIsEnd   = datum === stundenweisenU.datum_bis;
+        // Endtag mit Endzeit: Block von Tagesbeginn bis Endzeit
+        if (sIsEnd && !sIsingle && stundenweisenU.end_zeit && hi === 0) {
           const endIdx  = parseZeitAlsStundeIdx(stundenweisenU.end_zeit, true);
-          const colSpan = Math.max(1, Math.min(endIdx - startIdx, STUNDEN.length - hi));
+          const colSpan = Math.max(1, Math.min(endIdx, STUNDEN.length));
           row.push({ type: 'urlaub', datum, colSpan, urlaubTyp: stundenweisenU.typ ?? 'urlaub', urlaubObj: stundenweisenU });
           colsToSkip = colSpan - 1;
           hi++;
           continue;
+        }
+        // Eintägig oder Starttag: Block ab Startzeit
+        if (sIsingle || sIsStart) {
+          const startIdx = parseZeitAlsStundeIdx(stundenweisenU.start_zeit, false);
+          if (hi === startIdx) {
+            const colSpan = (sIsingle && stundenweisenU.end_zeit)
+              ? Math.max(1, Math.min(parseZeitAlsStundeIdx(stundenweisenU.end_zeit, true) - startIdx, STUNDEN.length - hi))
+              : STUNDEN.length - startIdx;
+            row.push({ type: 'urlaub', datum, colSpan, urlaubTyp: stundenweisenU.typ ?? 'urlaub', urlaubObj: stundenweisenU });
+            colsToSkip = colSpan - 1;
+            hi++;
+            continue;
+          }
         }
       }
 
