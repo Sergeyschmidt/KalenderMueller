@@ -124,7 +124,7 @@ type CellData =
   | null;
 
 // Globaler Index im 50-Spalten-Grid (0-basiert, Tag × 10 + Stundenindex)
-interface BueroOverlay { globalStart: number; globalEnd: number }
+interface BueroOverlay { globalStart: number; globalEnd: number; auftrag: Auftrag | null }
 
 function computeRow(
   ma: string,
@@ -215,12 +215,13 @@ function computeBueroOverlays(
 
     let hiStart: number | null = null;
     let hiEnd:   number | null = null;
+    let srcAuftrag: Auftrag | null = null;
     if (tagBuerozeiten.length > 0) {
       const b = tagBuerozeiten[0];
       const s = STUNDEN_ARR.indexOf(b.start_stunde);
       let   e = STUNDEN_ARR.indexOf(b.end_stunde);
       if (e === -1) e = STUNDEN_ARR.length;
-      if (s !== -1) { hiStart = s; hiEnd = e; }
+      if (s !== -1) { hiStart = s; hiEnd = e; srcAuftrag = b; }
     } else if (autoAktiv && autoBuerozeit) {
       const s = STUNDEN_ARR.indexOf(autoBuerozeit.start);
       let   e = STUNDEN_ARR.indexOf(autoBuerozeit.end);
@@ -232,6 +233,7 @@ function computeBueroOverlays(
       overlays.push({
         globalStart: di * STUNDEN.length + hiStart,
         globalEnd:   di * STUNDEN.length + hiEnd,
+        auftrag: srcAuftrag,
       });
     }
   }
@@ -565,6 +567,9 @@ export default function WochenAnsicht({
                           );
                         }
 
+                        const bueroAtCell = bueroOverlays.find(
+                          o => o.globalStart <= ci && ci < o.globalEnd
+                        );
                         return (
                           <DroppableZelle
                             key={`e${cell.datum}${cell.stunde}`}
@@ -573,7 +578,10 @@ export default function WochenAnsicht({
                             stunde={cell.stunde}
                             isToday={cell.datum === heute}
                             isHoliday={!!isFeiertag(cell.datum)}
-                            onClick={() => onZelleClick(cell.datum, ma, cell.stunde)}
+                            onClick={bueroAtCell?.auftrag
+                              ? () => onAuftragClick(bueroAtCell.auftrag!)
+                              : () => onZelleClick(cell.datum, ma, cell.stunde)
+                            }
                             gridColumn={gridCol}
                           />
                         );

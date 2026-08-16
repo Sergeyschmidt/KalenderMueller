@@ -99,7 +99,7 @@ type CellData =
   | { type: 'empty';   datum: string;    stunde: number }
   | null;
 
-interface BueroOverlay { globalStart: number; globalEnd: number }
+interface BueroOverlay { globalStart: number; globalEnd: number; auftrag: Auftrag | null }
 
 function computeRow(
   ma: string,
@@ -186,13 +186,14 @@ function computeBueroOverlay(
 
   let hiStart: number | null = null;
   let hiEnd:   number | null = null;
+  let srcAuftrag: Auftrag | null = null;
 
   if (tagBuerozeiten.length > 0) {
     const b = tagBuerozeiten[0];
     const s = STUNDEN_ARR.indexOf(b.start_stunde);
     let   e = STUNDEN_ARR.indexOf(b.end_stunde);
     if (e === -1) e = STUNDEN_ARR.length;
-    if (s !== -1) { hiStart = s; hiEnd = e; }
+    if (s !== -1) { hiStart = s; hiEnd = e; srcAuftrag = b; }
   } else if (autoAktiv && autoBuerozeit) {
     const s = STUNDEN_ARR.indexOf(autoBuerozeit.start);
     let   e = STUNDEN_ARR.indexOf(autoBuerozeit.end);
@@ -201,7 +202,7 @@ function computeBueroOverlay(
   }
 
   if (hiStart !== null && hiEnd !== null && hiEnd > hiStart) {
-    return { globalStart: hiStart, globalEnd: hiEnd };
+    return { globalStart: hiStart, globalEnd: hiEnd, auftrag: srcAuftrag };
   }
   return null;
 }
@@ -478,6 +479,9 @@ export default function TagAnsicht({
                           );
                         }
 
+                        const bueroAtCell = bueroOverlay &&
+                          bueroOverlay.globalStart <= ci && ci < bueroOverlay.globalEnd
+                          ? bueroOverlay : null;
                         return (
                           <DroppableZelle
                             key={`e${cell.datum}${cell.stunde}`}
@@ -486,7 +490,10 @@ export default function TagAnsicht({
                             stunde={cell.stunde}
                             isToday={cell.datum === heute}
                             isHoliday={!!isFeiertag(cell.datum)}
-                            onClick={() => onZelleClick(cell.datum, ma, cell.stunde)}
+                            onClick={bueroAtCell?.auftrag
+                              ? () => onAuftragClick(bueroAtCell.auftrag!)
+                              : () => onZelleClick(cell.datum, ma, cell.stunde)
+                            }
                             gridColumn={gridCol}
                           />
                         );
