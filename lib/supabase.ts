@@ -220,7 +220,7 @@ export async function dbUpdateAuftrag(id: string, updates: Partial<Auftrag>): Pr
     if (updates.kunde        !== undefined) p.kunde        = updates.kunde;
     if (updates.mitarbeiter  !== undefined) p.mitarbeiter  = updates.mitarbeiter;
     if (updates.datum        !== undefined) p.datum        = updates.datum;
-    if (updates.datum_bis    !== undefined) p.datum_bis    = updates.datum_bis;
+    if ('datum_bis' in updates) p.datum_bis = updates.datum_bis ?? null;
     if (updates.start_stunde !== undefined) p.start_stunde = updates.start_stunde;
     if (updates.end_stunde   !== undefined) p.end_stunde   = updates.end_stunde;
     if (updates.status       !== undefined) p.status       = updates.status;

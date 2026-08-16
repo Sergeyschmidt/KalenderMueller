@@ -208,7 +208,9 @@ function computeBueroOverlays(
     const autoAktiv = autoBuerozeit !== null && isFeiertag(datum) === null && !ausnahmenSet.has(`${ma}|${datum}`);
 
     const tagBuerozeiten = auftraege.filter(
-      a => getAuftragMitarbeiterListe(a).includes(ma) && a.datum === datum && a.typ === 'buerozeit'
+      a => getAuftragMitarbeiterListe(a).includes(ma) &&
+           a.datum <= datum && (a.datum_bis ?? a.datum) >= datum &&
+           a.typ === 'buerozeit'
     );
 
     let hiStart: number | null = null;
