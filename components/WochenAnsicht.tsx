@@ -577,6 +577,16 @@ export default function WochenAnsicht({
             })}
           </tbody>
         </table>
+        {wochentage.slice(1).map((_, i) => (
+          <div
+            key={i}
+            className="absolute top-0 bottom-0 w-px pointer-events-none z-30"
+            style={{
+              left: `calc(72px + (100% - 72px) * ${i + 1} / ${wochentage.length})`,
+              backgroundColor: 'rgba(0,0,0,0.10)',
+            }}
+          />
+        ))}
         </div>
       </div>
     </div>
