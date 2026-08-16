@@ -361,7 +361,7 @@ export default function WochenAnsicht({
                 const dayEvents = jahresEreignisse.filter(e => e.datum === datum);
                 return (
                   <th key={datum} colSpan={10}
-                    className={`border border-slate-400 border-r-[3px] border-r-slate-600 text-center leading-none py-1.5 text-white ${bg}`}>
+                    className={`border border-slate-300 text-center leading-none py-1.5 text-white ${bg}`}>
                     <div className="text-[11px] font-bold tracking-tight">
                       {WOCHENTAGE_KURZ[di]}&nbsp;{formatAnzeige(parseDatum(datum))}
                     </div>
@@ -389,10 +389,7 @@ export default function WochenAnsicht({
               {wochentage.map((datum) =>
                 STUNDEN.map((h, hi) => (
                   <th key={`${datum}-${h}`}
-                    className={`border-b border-r border-slate-300 bg-slate-100
-                                text-[10px] font-semibold text-slate-500 text-center py-1
-                                ${hi === 0 ? 'border-l border-l-slate-400' : ''}
-                                ${hi === STUNDEN.length - 1 ? 'border-r-[3px] border-r-slate-400' : ''}`}>
+                    className="border-b border-r border-slate-300 bg-slate-100 text-[10px] font-semibold text-slate-500 text-center py-1">
                     {h}
                   </th>
                 ))
@@ -580,14 +577,6 @@ export default function WochenAnsicht({
             })}
           </tbody>
         </table>
-        {/* Vertikale Tagestrennlinien – überspannen die gesamte Tabellenhöhe unabhängig vom Zelleninhalt */}
-        {wochentage.slice(1).map((_, i) => (
-          <div
-            key={i}
-            className="absolute top-0 bottom-0 w-[3px] bg-slate-500 pointer-events-none z-30"
-            style={{ left: `calc(72px + (100% - 72px) * ${i + 1} / ${wochentage.length})` }}
-          />
-        ))}
         </div>
       </div>
     </div>
