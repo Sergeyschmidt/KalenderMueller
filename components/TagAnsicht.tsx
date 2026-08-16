@@ -205,8 +205,9 @@ function AuftragKarte({ auftrag, rowMitarbeiter, onClick }: { auftrag: Auftrag; 
     data: { auftrag },
   });
 
-  const subtitle = [auftrag.kunde, auftrag.datum_bis ? `bis ${auftrag.datum_bis}` : '']
-    .filter(Boolean).join(' · ');
+  const hauptText  = auftrag.kunde || auftrag.titel;
+  const nebenText  = auftrag.kunde && auftrag.titel ? auftrag.titel : null;
+  const tooltipExtra = [nebenText, auftrag.datum_bis ? `bis ${auftrag.datum_bis}` : ''].filter(Boolean).join(' · ');
 
   return (
     <div
@@ -214,7 +215,7 @@ function AuftragKarte({ auftrag, rowMitarbeiter, onClick }: { auftrag: Auftrag; 
       {...listeners}
       {...attributes}
       onClick={e => { e.stopPropagation(); onClick(); }}
-      title={`${auftrag.titel}${subtitle ? ' · ' + subtitle : ''}`}
+      title={`${hauptText}${tooltipExtra ? ' · ' + tooltipExtra : ''}`}
       className={`h-full w-full flex items-center overflow-hidden
                   cursor-grab select-none rounded-sm transition-opacity
                   ${auftrag.typ === 'buerozeit'
@@ -228,10 +229,10 @@ function AuftragKarte({ auftrag, rowMitarbeiter, onClick }: { auftrag: Auftrag; 
           ${auftrag.typ === 'buerozeit'
             ? 'text-[11px] text-orange-700'
             : 'text-[13px] text-slate-800'}`}>
-          {auftrag.titel}
+          {hauptText}
         </div>
-        {auftrag.kunde && (
-          <div className="text-[11px] text-slate-500 truncate">{auftrag.kunde}</div>
+        {nebenText && (
+          <div className="text-[11px] text-slate-500 truncate">{nebenText}</div>
         )}
       </div>
     </div>

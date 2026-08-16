@@ -249,8 +249,9 @@ function AuftragKarte({ auftrag, rowMitarbeiter, onClick }: { auftrag: Auftrag; 
     data: { auftrag },
   });
 
-  const subtitle = [auftrag.kunde, auftrag.datum_bis ? `bis ${auftrag.datum_bis}` : '']
-    .filter(Boolean).join(' · ');
+  const hauptText  = auftrag.kunde || auftrag.titel;
+  const nebenText  = auftrag.kunde && auftrag.titel ? auftrag.titel : null;
+  const tooltipExtra = [nebenText, auftrag.datum_bis ? `bis ${auftrag.datum_bis}` : ''].filter(Boolean).join(' · ');
 
   return (
     <div
@@ -258,7 +259,7 @@ function AuftragKarte({ auftrag, rowMitarbeiter, onClick }: { auftrag: Auftrag; 
       {...listeners}
       {...attributes}
       onClick={e => { e.stopPropagation(); onClick(); }}
-      title={`${auftrag.titel}${subtitle ? ' · ' + subtitle : ''}`}
+      title={`${hauptText}${tooltipExtra ? ' · ' + tooltipExtra : ''}`}
       className={`h-full w-full flex items-center overflow-hidden
                   cursor-grab select-none rounded-sm transition-opacity
                   ${auftrag.typ === 'buerozeit'
@@ -267,12 +268,17 @@ function AuftragKarte({ auftrag, rowMitarbeiter, onClick }: { auftrag: Auftrag; 
                   ${isDragging ? 'opacity-25' : ''}`}
     >
       <span className={`shrink-0 w-2 h-2 rounded-full ${auftrag.typ === 'buerozeit' ? 'bg-orange-400' : STATUS_DOT_COLORS[auftrag.status]}`} />
-      <span className={`leading-none min-w-0 overflow-hidden font-semibold
-        ${auftrag.typ === 'buerozeit'
-          ? 'text-[10px] text-orange-700'
-          : 'text-[11px] text-slate-800 truncate'}`}>
-        {auftrag.titel}
-      </span>
+      <div className="min-w-0 overflow-hidden">
+        <div className={`leading-tight font-semibold truncate
+          ${auftrag.typ === 'buerozeit'
+            ? 'text-[10px] text-orange-700'
+            : 'text-[11px] text-slate-800'}`}>
+          {hauptText}
+        </div>
+        {nebenText && (
+          <div className="text-[9px] text-slate-500 truncate leading-tight">{nebenText}</div>
+        )}
+      </div>
     </div>
   );
 }
