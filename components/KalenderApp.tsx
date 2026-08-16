@@ -723,12 +723,12 @@ export default function KalenderApp() {
 
           <div className="shrink-0 flex items-center gap-5 text-xs text-slate-500 px-1">
             {[
-              { label: 'Erfasst',        dot: 'bg-red-500'    },
-              { label: 'In Bearbeitung', dot: 'bg-yellow-500' },
-              { label: 'Fertig',         dot: 'bg-green-500'  },
-            ].map(({ label, dot }) => (
+              { label: 'Erfasst',        t: 'border-t-red-500',    l: 'border-l-red-500'    },
+              { label: 'In Bearbeitung', t: 'border-t-yellow-500', l: 'border-l-yellow-500' },
+              { label: 'Fertig',         t: 'border-t-green-500',  l: 'border-l-green-500'  },
+            ].map(({ label, t, l }) => (
               <div key={label} className="flex items-center gap-1.5">
-                <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />
+                <span className={`w-7 h-4 rounded-sm bg-white shadow-sm border-t-[4px] border-l-[4px] ${t} ${l}`} />
                 {label}
               </div>
             ))}

@@ -4,7 +4,7 @@ import { useDroppable, useDraggable } from '@dnd-kit/core';
 import {
   STUNDEN, Auftrag, Urlaub, Mitarbeiter,
   AbwesenheitsTyp, ABWESENHEITS_LABELS,
-  STATUS_BORDER_T, STATUS_DOT_COLORS,
+  STATUS_BORDER_T, STATUS_BORDER_L, STATUS_DOT_COLORS,
   JahresEreignis, getAuftragMitarbeiterListe, getUrlaubMitarbeiterListe,
 } from '@/lib/types';
 import { formatTagKopf, parseDatum } from '@/lib/dateUtils';
@@ -216,10 +216,10 @@ function AuftragKarte({ auftrag, rowMitarbeiter, onClick }: { auftrag: Auftrag; 
       onClick={e => { e.stopPropagation(); onClick(); }}
       title={`${auftrag.titel}${subtitle ? ' · ' + subtitle : ''}`}
       className={`h-full w-full flex items-center overflow-hidden
-                  cursor-grab select-none rounded-sm border-t-[3px] transition-opacity
+                  cursor-grab select-none rounded-sm transition-opacity
                   ${auftrag.typ === 'buerozeit'
-                    ? 'bg-orange-100/80 border-t-orange-400 gap-0.5 px-0.5'
-                    : `bg-white/85 ${STATUS_BORDER_T[auftrag.status]} gap-1.5 px-2`}
+                    ? 'bg-orange-100/80 border-t-[3px] border-t-orange-400 gap-0.5 px-0.5'
+                    : `bg-white/85 border-t-[5px] border-l-[5px] ${STATUS_BORDER_T[auftrag.status]} ${STATUS_BORDER_L[auftrag.status]} gap-1.5 px-2`}
                   ${isDragging ? 'opacity-25' : ''}`}
     >
       <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${auftrag.typ === 'buerozeit' ? 'bg-orange-400' : STATUS_DOT_COLORS[auftrag.status]}`} />
