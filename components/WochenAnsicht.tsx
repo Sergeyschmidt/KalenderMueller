@@ -541,9 +541,21 @@ export default function WochenAnsicht({
                         const gridCol = ci + 1;
 
                         if (cell.type === 'urlaub') {
-                          const zeitLabel = cell.urlaubObj.start_zeit && cell.urlaubObj.end_zeit
-                            ? `${cell.urlaubObj.start_zeit.slice(0, 5)}–${cell.urlaubObj.end_zeit.slice(0, 5)}`
-                            : null;
+                          const _u  = cell.urlaubObj;
+                          const _sz = _u.start_zeit;
+                          const _ez = _u.end_zeit;
+                          const _multi   = _u.datum_von !== _u.datum_bis;
+                          const _isStart = cell.datum === _u.datum_von;
+                          const _isEnd   = cell.datum === _u.datum_bis;
+                          const zeitLabel = (() => {
+                            if (!_sz)            return null;                       // ganztägig
+                            if (!_multi)         return _ez                         // eintägig
+                              ? `${_sz.slice(0,5)}–${_ez.slice(0,5)}`
+                              : `ab ${_sz.slice(0,5)}`;
+                            if (_isStart)        return `ab ${_sz.slice(0,5)}`;    // Starttag
+                            if (_isEnd && _ez)   return `bis ${_ez.slice(0,5)}`;   // Endtag
+                            return null;                                            // Mitteltag
+                          })();
                           return (
                             <div
                               key={`u${ci}`}
