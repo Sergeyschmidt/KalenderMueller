@@ -63,14 +63,15 @@ export default function AuftragModal({ auftrag, prefill, mitarbeiterNamen, onSav
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.kunde.trim()) return;
+    const isBuero = form.typ === 'buerozeit';
+    if (!isBuero && !form.kunde.trim()) return;
     if (form.mitarbeiterListe.length === 0) return;
     if (!mehrtaegig && form.end_stunde <= form.start_stunde) return;
 
     onSave({
-      titel:             form.titel.trim(),
-      beschreibung:      form.beschreibung.trim() || undefined,
-      kunde:             form.kunde.trim()        || undefined,
+      titel:             isBuero ? 'Büro' : form.titel.trim(),
+      beschreibung:      isBuero ? undefined : (form.beschreibung.trim() || undefined),
+      kunde:             isBuero ? undefined : (form.kunde.trim()        || undefined),
       mitarbeiter:       form.mitarbeiterListe[0],
       mitarbeiter_liste: form.mitarbeiterListe,
       datum:             form.datum,
@@ -132,22 +133,25 @@ export default function AuftragModal({ auftrag, prefill, mitarbeiterNamen, onSav
             ))}
           </div>
 
-          {/* Kunde */}
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Kunde *</label>
-            <input type="text" value={form.kunde} required autoFocus
-              onChange={e => setForm(f => ({ ...f, kunde: e.target.value }))}
-              placeholder="Kundenname" className={inputCls} />
-          </div>
+          {/* Kunde + Titel – nur für Auftragstyp sichtbar */}
+          {form.typ !== 'buerozeit' && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Kunde *</label>
+                <input type="text" value={form.kunde} required autoFocus
+                  onChange={e => setForm(f => ({ ...f, kunde: e.target.value }))}
+                  placeholder="Kundenname" className={inputCls} />
+              </div>
 
-          {/* Titel */}
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Auftragsbezeichnung</label>
-            <input type="text" value={form.titel}
-              onChange={e => setForm(f => ({ ...f, titel: e.target.value }))}
-              placeholder="z. B. Biegeprogramm erstellen"
-              className={inputCls} />
-          </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Auftragsbezeichnung</label>
+                <input type="text" value={form.titel}
+                  onChange={e => setForm(f => ({ ...f, titel: e.target.value }))}
+                  placeholder="z. B. Biegeprogramm erstellen"
+                  className={inputCls} />
+              </div>
+            </>
+          )}
 
           {/* Mitarbeiter (Mehrfachauswahl) */}
           <div>
@@ -269,22 +273,24 @@ export default function AuftragModal({ auftrag, prefill, mitarbeiterNamen, onSav
             </div>
           )}
 
-          {/* Status */}
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
-            <div className="flex gap-2">
-              {STATUSES.map(s => (
-                <button key={s} type="button"
-                  onClick={() => setForm(f => ({ ...f, status: s }))}
-                  className={`flex-1 py-2 px-1.5 rounded-lg text-xs font-medium border transition-colors
-                    ${form.status === s
-                      ? STATUS_BTN[s]
-                      : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50'}`}>
-                  {STATUS_LABELS[s]}
-                </button>
-              ))}
+          {/* Status – nur für Auftragstyp sichtbar */}
+          {form.typ !== 'buerozeit' && (
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
+              <div className="flex gap-2">
+                {STATUSES.map(s => (
+                  <button key={s} type="button"
+                    onClick={() => setForm(f => ({ ...f, status: s }))}
+                    className={`flex-1 py-2 px-1.5 rounded-lg text-xs font-medium border transition-colors
+                      ${form.status === s
+                        ? STATUS_BTN[s]
+                        : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50'}`}>
+                    {STATUS_LABELS[s]}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Beschreibung */}
           <div>

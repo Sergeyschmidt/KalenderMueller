@@ -63,7 +63,7 @@ function kurzMA(name: string): string {
 
 const STUNDEN_ARR = STUNDEN as readonly number[];
 
-// Für ein einzelnes Datum: colSpan = (eintägig) end-start, (mehrtägig) bis Tagesende
+// Für ein einzelnes Datum: colSpan abhängig davon ob dieser Tag Start-, Zwischen- oder Endtag ist
 function colSpanFuerAuftrag(auftrag: Auftrag, datum: string, startHi: number): number {
   if (!auftrag.datum_bis || auftrag.datum_bis === auftrag.datum) {
     return auftrag.end_stunde - auftrag.start_stunde;
@@ -72,7 +72,9 @@ function colSpanFuerAuftrag(auftrag: Auftrag, datum: string, startHi: number): n
   if (auftrag.datum_bis > datum) {
     return STUNDEN.length - startHi;
   }
-  return auftrag.end_stunde - auftrag.start_stunde;
+  // Endtag eines mehrtägigen Auftrags (auftrag.datum < datum === auftrag.datum_bis)
+  const endHi = STUNDEN_ARR.indexOf(auftrag.end_stunde);
+  return Math.max(1, (endHi === -1 ? STUNDEN.length : endHi) - startHi);
 }
 
 function parseZeitAlsStundeIdx(zeit: string, roundUp: boolean): number {
@@ -123,8 +125,11 @@ function computeRow(
   ) ?? null;
 
   // Nur reguläre Aufträge – Bürozeiten werden separat als Overlay gerendert
+  // Mehrtägige Aufträge die diesen Tag überspannen werden ebenfalls erfasst
   const tagAuftraege = auftraege.filter(
-    a => getAuftragMitarbeiterListe(a).includes(ma) && a.datum === datum && a.typ !== 'buerozeit'
+    a => getAuftragMitarbeiterListe(a).includes(ma) &&
+         a.datum <= datum && (a.datum_bis ?? a.datum) >= datum &&
+         a.typ !== 'buerozeit'
   );
 
   let hi = 0;
@@ -148,7 +153,10 @@ function computeRow(
       }
     }
 
-    const auftrag = tagAuftraege.find(a => a.start_stunde === stunde);
+    // Aufträge die vor diesem Tag begonnen haben: am ersten Stunden-Slot einsetzen
+    const auftrag = tagAuftraege.find(a =>
+      a.datum < datum ? hi === 0 : a.start_stunde === stunde
+    );
     if (auftrag) {
       const colSpan = colSpanFuerAuftrag(auftrag, datum, hi);
       row.push({ type: 'auftrag', auftrag, colSpan });
