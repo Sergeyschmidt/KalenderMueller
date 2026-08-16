@@ -143,9 +143,8 @@ export const ABWESENHEITS_LABELS: Record<AbwesenheitsTyp, string> = {
   uebrige:        'Übrige',
 };
 
-/** Sichtbare Typen im Formular – 'uebrige' bleibt nur für Rückwärtskompatibilität bestehender Einträge */
 export const ABWESENHEITS_TYPEN_SICHTBAR: AbwesenheitsTyp[] = [
-  'urlaub', 'krankheit', 'militaer', 'zivilschutz', 'betriebsferien',
+  'urlaub', 'krankheit', 'militaer', 'zivilschutz', 'betriebsferien', 'uebrige',
 ];
 
 /** Punkt-Farbe in MonatsAnsicht */

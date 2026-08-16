@@ -287,7 +287,7 @@ export default function UrlaubModal({ onClose, mitarbeiterNamen, onAddUrlaub, on
               )}
 
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Notiz (optional)</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Notiz</label>
                 <input
                   type="text"
                   value={form.notiz}

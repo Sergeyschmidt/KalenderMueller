@@ -294,7 +294,7 @@ export default function AuftragModal({ auftrag, prefill, mitarbeiterNamen, onSav
 
           {/* Beschreibung */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Beschreibung (optional)</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Beschreibung</label>
             <textarea value={form.beschreibung} rows={2} placeholder="Weitere Details…"
               onChange={e => setForm(f => ({ ...f, beschreibung: e.target.value }))}
               className={`${inputCls} resize-none`} />
