@@ -63,7 +63,7 @@ export default function AuftragModal({ auftrag, prefill, mitarbeiterNamen, onSav
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.titel.trim()) return;
+    if (!form.kunde.trim()) return;
     if (form.mitarbeiterListe.length === 0) return;
     if (!mehrtaegig && form.end_stunde <= form.start_stunde) return;
 
@@ -132,21 +132,21 @@ export default function AuftragModal({ auftrag, prefill, mitarbeiterNamen, onSav
             ))}
           </div>
 
+          {/* Kunde */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Kunde *</label>
+            <input type="text" value={form.kunde} required autoFocus
+              onChange={e => setForm(f => ({ ...f, kunde: e.target.value }))}
+              placeholder="Kundenname" className={inputCls} />
+          </div>
+
           {/* Titel */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Auftragsbezeichnung *</label>
-            <input type="text" value={form.titel} required autoFocus
+            <label className="block text-xs font-medium text-slate-600 mb-1">Auftragsbezeichnung</label>
+            <input type="text" value={form.titel}
               onChange={e => setForm(f => ({ ...f, titel: e.target.value }))}
               placeholder="z. B. Biegeprogramm erstellen"
               className={inputCls} />
-          </div>
-
-          {/* Kunde */}
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Kunde</label>
-            <input type="text" value={form.kunde}
-              onChange={e => setForm(f => ({ ...f, kunde: e.target.value }))}
-              placeholder="Kundenname" className={inputCls} />
           </div>
 
           {/* Mitarbeiter (Mehrfachauswahl) */}
