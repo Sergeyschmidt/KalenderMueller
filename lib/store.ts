@@ -8,7 +8,7 @@ interface KalenderStore {
   bueroAusnahmen: BueroAusnahme[];
   mitarbeiter:    Mitarbeiter[];
   isAuthenticated: boolean;
-  ansicht:        'woche' | 'monat';
+  ansicht:        'woche' | 'monat' | 'tag';
   aktuellesDatum: string;
   selectedTag:    string;
 
@@ -31,7 +31,7 @@ interface KalenderStore {
   deleteMitarbeiterItem:   (id: string) => void;
 
   setAuthenticated:  (value: boolean) => void;
-  setAnsicht:        (ansicht: 'woche' | 'monat') => void;
+  setAnsicht:        (ansicht: 'woche' | 'monat' | 'tag') => void;
   setAktuellesDatum: (datum: string) => void;
   setSelectedTag:    (datum: string) => void;
 }

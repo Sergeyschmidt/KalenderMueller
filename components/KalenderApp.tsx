@@ -18,6 +18,7 @@ import {
   formatDatum,
   formatWocheAnzeige,
   formatMonatAnzeige,
+  formatTagKopf,
   naechsteWoche,
   vorherigeWoche,
   naechsterMonat,
@@ -54,6 +55,7 @@ import {
 } from '@/lib/buerozeiten';
 import WochenAnsicht    from './WochenAnsicht';
 import MonatsAnsicht    from './MonatsAnsicht';
+import TagAnsicht       from './TagAnsicht';
 import AuftragModal     from './AuftragModal';
 import UrlaubModal        from './UrlaubModal';
 import MitarbeiterModal  from './MitarbeiterModal';
@@ -534,14 +536,24 @@ export default function KalenderApp() {
 
   // ── Navigation ────────────────────────────────────────────────────────────
   const navigiereZurueck = () => {
-    setAktuellesDatum(formatDatum(ansicht === 'woche'
-      ? vorherigeWoche(aktuellesDatumObj)
-      : vorherigerMonat(aktuellesDatumObj)));
+    if (ansicht === 'tag') {
+      const d = new Date(aktuellesDatumObj); d.setDate(d.getDate() - 1);
+      const s = formatDatum(d); setAktuellesDatum(s); setSelectedTag(s);
+    } else {
+      setAktuellesDatum(formatDatum(ansicht === 'woche'
+        ? vorherigeWoche(aktuellesDatumObj)
+        : vorherigerMonat(aktuellesDatumObj)));
+    }
   };
   const navigiereVorwaerts = () => {
-    setAktuellesDatum(formatDatum(ansicht === 'woche'
-      ? naechsteWoche(aktuellesDatumObj)
-      : naechsterMonat(aktuellesDatumObj)));
+    if (ansicht === 'tag') {
+      const d = new Date(aktuellesDatumObj); d.setDate(d.getDate() + 1);
+      const s = formatDatum(d); setAktuellesDatum(s); setSelectedTag(s);
+    } else {
+      setAktuellesDatum(formatDatum(ansicht === 'woche'
+        ? naechsteWoche(aktuellesDatumObj)
+        : naechsterMonat(aktuellesDatumObj)));
+    }
   };
   const navigiereHeute = () => {
     const s = formatDatum(new Date());
@@ -594,11 +606,11 @@ export default function KalenderApp() {
             </div>
 
             <div className="flex items-center bg-blue-800/60 rounded-lg p-1 gap-0.5">
-              {(['woche', 'monat'] as const).map(v => (
+              {([['tag', 'Tag'], ['woche', 'Woche'], ['monat', 'Monat']] as const).map(([v, label]) => (
                 <button key={v} onClick={() => setAnsicht(v)}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors
                     ${ansicht === v ? 'bg-white text-blue-900' : 'text-blue-200 hover:text-white'}`}>
-                  {v === 'woche' ? 'Woche' : 'Monat'}
+                  {label}
                 </button>
               ))}
             </div>
@@ -614,11 +626,13 @@ export default function KalenderApp() {
                 </svg>
               </button>
               <span className="text-sm font-medium min-w-[220px] text-center select-none">
-                {ansicht === 'woche'
-                  ? <><span className="text-blue-300 font-bold">KW&nbsp;{getISOWeek(aktuellesDatumObj)}</span>
-                      <span className="mx-1.5 text-blue-500">·</span>
-                      {formatWocheAnzeige(aktuellesDatumObj)}</>
-                  : formatMonatAnzeige(aktuellesDatumObj)}
+                {ansicht === 'tag'
+                  ? formatTagKopf(aktuellesDatumObj)
+                  : ansicht === 'woche'
+                    ? <><span className="text-blue-300 font-bold">KW&nbsp;{getISOWeek(aktuellesDatumObj)}</span>
+                        <span className="mx-1.5 text-blue-500">·</span>
+                        {formatWocheAnzeige(aktuellesDatumObj)}</>
+                    : formatMonatAnzeige(aktuellesDatumObj)}
               </span>
               <button onClick={navigiereVorwaerts} className="p-1.5 rounded-lg hover:bg-blue-800 transition-colors">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -662,7 +676,21 @@ export default function KalenderApp() {
 
         {/* Inhalt */}
         <main className="flex-1 min-h-0 w-full px-4 pt-3 pb-2 flex flex-col gap-3">
-          {ansicht === 'woche' ? (
+          {ansicht === 'tag' ? (
+            <div className="flex-1 min-h-0">
+              <TagAnsicht
+                datum={aktuellesDatum}
+                auftraege={alleAuftraege}
+                urlaube={urlaube}
+                mitarbeiterNamen={aktiveMitarbeiterNamen}
+                mitarbeiterListe={aktiveMitarbeiterListe}
+                ausnahmenSet={ausnahmenSet}
+                jahresEreignisse={jahresEreignisse}
+                onZelleClick={handleZelleClick}
+                onAuftragClick={handleAuftragClick}
+              />
+            </div>
+          ) : ansicht === 'woche' ? (
             <div className="flex-1 min-h-0">
               <WochenAnsicht
                 wochentage={wochentageStr}
