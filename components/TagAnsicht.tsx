@@ -101,6 +101,92 @@ type CellData =
 
 interface BueroOverlay { globalStart: number; globalEnd: number; auftrag: Auftrag | null }
 
+// ── Überlappungs-Erkennung ───────────────────────────────────────────────────
+interface ExtraAuftragCell {
+  auftrag:      Auftrag;
+  gridColStart: number;  // 1-basiert (CSS grid-column)
+  colSpan:      number;
+  lane:         number;
+  totalLanes:   number;
+}
+
+function laneStyle(lane: number, totalLanes: number): { top: string; height: string } {
+  if (totalLanes <= 1) return { top: '12.5%', height: '75%' };
+  const pct = 100 / totalLanes;
+  return { top: `${lane * pct + 1.5}%`, height: `${pct - 3}%` };
+}
+
+function computeAuftragOverlaps(
+  ma:       string,
+  datum:    string,
+  auftraege: Auftrag[],
+): { laneMap: Map<string, { lane: number; totalLanes: number }>; extraCells: ExtraAuftragCell[] } {
+  const laneMap    = new Map<string, { lane: number; totalLanes: number }>();
+  const extraCells: ExtraAuftragCell[] = [];
+
+  const dayItems = auftraege.filter(
+    a => getAuftragMitarbeiterListe(a).includes(ma) &&
+         a.datum <= datum && (a.datum_bis ?? a.datum) >= datum &&
+         a.typ !== 'buerozeit'
+  );
+  if (dayItems.length === 0) return { laneMap, extraCells };
+
+  // Effektive Zeitspanne jedes Auftrags auf diesem Tag
+  const withRanges = dayItems.map(a => {
+    let s = a.start_stunde, e = a.end_stunde;
+    if (a.datum < datum) s = STUNDEN[0];
+    if (a.datum_bis && a.datum_bis > datum) e = 17;
+    return { a, s, e };
+  });
+
+  // Greedy Lane-Zuweisung (nach Startzeit sortiert)
+  const sorted     = [...withRanges].sort((x, y) => x.s - y.s || x.e - y.e);
+  const laneEnds: number[] = [];
+  const laneAssign = new Map<string, number>();
+  for (const { a, s, e } of sorted) {
+    const free = laneEnds.findIndex(t => t <= s);
+    const ln   = free !== -1 ? free : laneEnds.length;
+    if (free !== -1) laneEnds[free] = e; else laneEnds.push(e);
+    laneAssign.set(a.id, ln);
+  }
+  const maxLanes = laneEnds.length;
+  for (const { a } of withRanges) {
+    laneMap.set(a.id, { lane: laneAssign.get(a.id)!, totalLanes: maxLanes });
+  }
+
+  // Simuliere computeRow-Logik: sekundäre Aufträge ermitteln
+  let colsToSkip = 0;
+  for (let hi = 0; hi < STUNDEN.length; hi++) {
+    const stunde = STUNDEN[hi];
+    if (colsToSkip > 0) {
+      dayItems.filter(a => a.datum < datum ? hi === 0 : a.start_stunde === stunde).forEach(a => {
+        if (!extraCells.some(c => c.auftrag.id === a.id)) {
+          const info = laneMap.get(a.id)!;
+          const gridColStart = hi + 1;
+          const cs = colSpanFuerAuftrag(a, datum, hi);
+          extraCells.push({ auftrag: a, gridColStart, colSpan: cs, ...info });
+        }
+      });
+      colsToSkip--;
+      continue;
+    }
+    const allAtHour = dayItems.filter(a =>
+      a.datum < datum ? hi === 0 : a.start_stunde === stunde
+    );
+    if (allAtHour.length > 0) {
+      colsToSkip = colSpanFuerAuftrag(allAtHour[0], datum, hi) - 1;
+      allAtHour.slice(1).forEach(a => {
+        const info = laneMap.get(a.id)!;
+        const gridColStart = hi + 1;
+        const cs = colSpanFuerAuftrag(a, datum, hi);
+        extraCells.push({ auftrag: a, gridColStart, colSpan: cs, ...info });
+      });
+    }
+  }
+
+  return { laneMap, extraCells };
+}
+
 function computeRow(
   ma: string,
   datum: string,
@@ -402,6 +488,7 @@ export default function TagAnsicht({
                   : null;
               const cells      = computeRow(ma, datum, auftraege, urlaube);
               const bueroOverlay = computeBueroOverlay(ma, datum, auftraege, autoBuerozeit, ausnahmenSet);
+              const { laneMap, extraCells } = computeAuftragOverlaps(ma, datum, auftraege);
 
               return (
                 <tr key={ma} style={{ height: '0' }}
@@ -496,6 +583,10 @@ export default function TagAnsicht({
                         }
 
                         if (cell.type === 'auftrag') {
+                          const _ls = laneStyle(
+                            laneMap.get(cell.auftrag.id)?.lane ?? 0,
+                            laneMap.get(cell.auftrag.id)?.totalLanes ?? 1,
+                          );
                           return (
                             <div
                               key={`a${cell.auftrag.id}`}
@@ -506,9 +597,8 @@ export default function TagAnsicht({
                                 zIndex: 2,
                               }}
                             >
-                              {/* 75 % Höhe zentriert – wie in WochenAnsicht */}
                               <div className="absolute inset-x-0 overflow-hidden"
-                                style={{ top: '12.5%', height: '75%' }}>
+                                style={{ top: _ls.top, height: _ls.height }}>
                                 <AuftragKarte
                                   auftrag={cell.auftrag}
                                   rowMitarbeiter={ma}
@@ -536,6 +626,22 @@ export default function TagAnsicht({
                             }
                             gridColumn={gridCol}
                           />
+                        );
+                      })}
+
+                      {/* Sekundäre überlappende Aufträge */}
+                      {extraCells.map((ec) => {
+                        const _ls = laneStyle(ec.lane, ec.totalLanes);
+                        return (
+                          <div
+                            key={`ec_${ec.auftrag.id}`}
+                            className="border-r border-slate-200 overflow-hidden"
+                            style={{ gridColumn: `${ec.gridColStart} / span ${ec.colSpan}`, position: 'relative', zIndex: 2 }}
+                          >
+                            <div className="absolute inset-x-0 overflow-hidden" style={{ top: _ls.top, height: _ls.height }}>
+                              <AuftragKarte auftrag={ec.auftrag} rowMitarbeiter={ma} onClick={() => onAuftragClick(ec.auftrag)} />
+                            </div>
+                          </div>
                         );
                       })}
                     </div>

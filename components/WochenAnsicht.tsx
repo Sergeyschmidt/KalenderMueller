@@ -126,6 +126,91 @@ type CellData =
 // Globaler Index im 50-Spalten-Grid (0-basiert, Tag × 10 + Stundenindex)
 interface BueroOverlay { globalStart: number; globalEnd: number; auftrag: Auftrag | null }
 
+// ── Überlappungs-Erkennung ───────────────────────────────────────────────────
+interface ExtraAuftragCell {
+  auftrag:      Auftrag;
+  gridColStart: number;  // 1-basiert (CSS grid-column)
+  colSpan:      number;
+  lane:         number;
+  totalLanes:   number;
+}
+
+function laneStyle(lane: number, totalLanes: number): { top: string; height: string } {
+  if (totalLanes <= 1) return { top: '12.5%', height: '75%' };
+  const pct = 100 / totalLanes;
+  return { top: `${lane * pct + 1.5}%`, height: `${pct - 3}%` };
+}
+
+function computeAuftragOverlaps(
+  ma:         string,
+  wochentage: string[],
+  auftraege:  Auftrag[],
+): { laneMap: Map<string, { lane: number; totalLanes: number }>; extraCells: ExtraAuftragCell[] } {
+  const laneMap    = new Map<string, { lane: number; totalLanes: number }>();
+  const extraCells: ExtraAuftragCell[] = [];
+
+  for (let di = 0; di < wochentage.length; di++) {
+    const datum    = wochentage[di];
+    const dayItems = auftraege.filter(
+      a => getAuftragMitarbeiterListe(a).includes(ma) && a.datum === datum && a.typ !== 'buerozeit'
+    );
+    if (dayItems.length === 0) continue;
+
+    // Effektive Zeitspanne jedes Auftrags auf diesem Tag
+    const withRanges = dayItems.map(a => {
+      const multi = !!(a.datum_bis && a.datum_bis !== a.datum);
+      const s = a.start_stunde;
+      const e = multi ? 17 : a.end_stunde;
+      return { a, s, e };
+    });
+
+    // Greedy Lane-Zuweisung (nach Startzeit sortiert)
+    const sorted     = [...withRanges].sort((x, y) => x.s - y.s || x.e - y.e);
+    const laneEnds: number[] = [];
+    const laneAssign = new Map<string, number>();
+    for (const { a, s, e } of sorted) {
+      const free = laneEnds.findIndex(t => t <= s);
+      const ln   = free !== -1 ? free : laneEnds.length;
+      if (free !== -1) laneEnds[free] = e; else laneEnds.push(e);
+      laneAssign.set(a.id, ln);
+    }
+    const maxLanes = laneEnds.length;
+    for (const { a } of withRanges) {
+      laneMap.set(a.id, { lane: laneAssign.get(a.id)!, totalLanes: maxLanes });
+    }
+
+    // Simuliere computeRow-Logik: sekundäre Aufträge ermitteln
+    let colsToSkip = 0;
+    for (let hi = 0; hi < STUNDEN.length; hi++) {
+      const stunde = STUNDEN[hi];
+      if (colsToSkip > 0) {
+        dayItems.filter(a => a.start_stunde === stunde).forEach(a => {
+          if (!extraCells.some(c => c.auftrag.id === a.id)) {
+            const info = laneMap.get(a.id)!;
+            const gridColStart = di * STUNDEN.length + hi + 1;
+            const cs = colSpanFuerAuftrag(a, wochentage, di, hi);
+            extraCells.push({ auftrag: a, gridColStart, colSpan: cs, ...info });
+          }
+        });
+        colsToSkip--;
+        continue;
+      }
+      const allAtHour = dayItems.filter(a => a.start_stunde === stunde);
+      if (allAtHour.length > 0) {
+        colsToSkip = colSpanFuerAuftrag(allAtHour[0], wochentage, di, hi) - 1;
+        allAtHour.slice(1).forEach(a => {
+          const info = laneMap.get(a.id)!;
+          const gridColStart = di * STUNDEN.length + hi + 1;
+          const cs = colSpanFuerAuftrag(a, wochentage, di, hi);
+          extraCells.push({ auftrag: a, gridColStart, colSpan: cs, ...info });
+        });
+      }
+    }
+  }
+
+  return { laneMap, extraCells };
+}
+
 function computeRow(
   ma: string,
   wochentage: string[],
@@ -445,6 +530,7 @@ export default function WochenAnsicht({
                   : null;
               const cells        = computeRow(ma, wochentage, auftraege, urlaube);
               const bueroOverlays = computeBueroOverlays(ma, wochentage, auftraege, autoBuerozeit, ausnahmenSet);
+              const { laneMap, extraCells } = computeAuftragOverlaps(ma, wochentage, auftraege);
               const totalCols    = wochentage.length * STUNDEN.length;
 
               return (
@@ -583,6 +669,10 @@ export default function WochenAnsicht({
                         }
 
                         if (cell.type === 'auftrag') {
+                          const _ls = laneStyle(
+                            laneMap.get(cell.auftrag.id)?.lane ?? 0,
+                            laneMap.get(cell.auftrag.id)?.totalLanes ?? 1,
+                          );
                           return (
                             <div
                               key={`a${cell.auftrag.id}`}
@@ -591,12 +681,10 @@ export default function WochenAnsicht({
                                 gridColumn: `${gridCol} / span ${cell.colSpan}`,
                                 position: 'relative',
                                 zIndex: 2,
-                                // Kein opaker Hintergrund – Büro-Orange scheint durch die Streifen oben/unten durch
                               }}
                             >
-                              {/* Karte auf 75 % Höhe zentriert → 12,5 % Streifen oben + unten zeigen Büro-Hintergrund */}
                               <div className="absolute inset-x-0 overflow-hidden"
-                                style={{ top: '12.5%', height: '75%' }}>
+                                style={{ top: _ls.top, height: _ls.height }}>
                                 <AuftragKarte
                                   auftrag={cell.auftrag}
                                   rowMitarbeiter={ma}
@@ -624,6 +712,22 @@ export default function WochenAnsicht({
                             }
                             gridColumn={gridCol}
                           />
+                        );
+                      })}
+
+                      {/* Sekundäre überlappende Aufträge */}
+                      {extraCells.map((ec) => {
+                        const _ls = laneStyle(ec.lane, ec.totalLanes);
+                        return (
+                          <div
+                            key={`ec_${ec.auftrag.id}`}
+                            className="border-r border-slate-200 overflow-hidden"
+                            style={{ gridColumn: `${ec.gridColStart} / span ${ec.colSpan}`, position: 'relative', zIndex: 2 }}
+                          >
+                            <div className="absolute inset-x-0 overflow-hidden" style={{ top: _ls.top, height: _ls.height }}>
+                              <AuftragKarte auftrag={ec.auftrag} rowMitarbeiter={ma} onClick={() => onAuftragClick(ec.auftrag)} />
+                            </div>
+                          </div>
                         );
                       })}
                     </div>
