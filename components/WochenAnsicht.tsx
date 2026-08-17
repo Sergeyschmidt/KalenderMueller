@@ -135,12 +135,6 @@ interface ExtraAuftragCell {
   totalLanes:   number;
 }
 
-function laneStyle(lane: number, totalLanes: number): { top: string; height: string } {
-  if (totalLanes <= 1) return { top: '12.5%', height: '75%' };
-  const pct = 100 / totalLanes;
-  return { top: `${lane * pct + 1.5}%`, height: `${pct - 3}%` };
-}
-
 function computeAuftragOverlaps(
   ma:         string,
   wochentage: string[],
@@ -669,29 +663,12 @@ export default function WochenAnsicht({
                         }
 
                         if (cell.type === 'auftrag') {
-                          const _ls = laneStyle(
-                            laneMap.get(cell.auftrag.id)?.lane ?? 0,
-                            laneMap.get(cell.auftrag.id)?.totalLanes ?? 1,
-                          );
+                          // Unsichtbarer Platzhalter – Karte kommt im Auftrags-Overlay darunter
                           return (
                             <div
-                              key={`a${cell.auftrag.id}`}
-                              className="border-r border-slate-200 overflow-hidden"
-                              style={{
-                                gridColumn: `${gridCol} / span ${cell.colSpan}`,
-                                position: 'relative',
-                                zIndex: 2,
-                              }}
-                            >
-                              <div className="absolute inset-x-0 overflow-hidden"
-                                style={{ top: _ls.top, height: _ls.height }}>
-                                <AuftragKarte
-                                  auftrag={cell.auftrag}
-                                  rowMitarbeiter={ma}
-                                  onClick={() => onAuftragClick(cell.auftrag)}
-                                />
-                              </div>
-                            </div>
+                              key={`a_spacer_${cell.auftrag.id}`}
+                              style={{ gridColumn: `${gridCol} / span ${cell.colSpan}` }}
+                            />
                           );
                         }
 
@@ -714,22 +691,42 @@ export default function WochenAnsicht({
                           />
                         );
                       })}
+                    </div>
 
-                      {/* Sekundäre überlappende Aufträge */}
-                      {extraCells.map((ec) => {
-                        const _ls = laneStyle(ec.lane, ec.totalLanes);
+                    {/* Auftrags-Overlay: absolut über dem Grid, Kollisionen vertikal gestapelt */}
+                    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 3 }}>
+                      {cells.map((cell, ci) => {
+                        if (cell?.type !== 'auftrag') return null;
+                        const { lane, totalLanes } = laneMap.get(cell.auftrag.id) ?? { lane: 0, totalLanes: 1 };
                         return (
                           <div
-                            key={`ec_${ec.auftrag.id}`}
-                            className="border-r border-slate-200 overflow-hidden"
-                            style={{ gridColumn: `${ec.gridColStart} / span ${ec.colSpan}`, position: 'relative', zIndex: 2 }}
+                            key={`a_${cell.auftrag.id}`}
+                            className="absolute pointer-events-auto overflow-hidden"
+                            style={{
+                              left:   `${(ci / totalCols) * 100}%`,
+                              width:  `${(cell.colSpan / totalCols) * 100}%`,
+                              top:    `${(lane / totalLanes) * 100 + 1}%`,
+                              height: `${(1 / totalLanes) * 100 - 2}%`,
+                            }}
                           >
-                            <div className="absolute inset-x-0 overflow-hidden" style={{ top: _ls.top, height: _ls.height }}>
-                              <AuftragKarte auftrag={ec.auftrag} rowMitarbeiter={ma} onClick={() => onAuftragClick(ec.auftrag)} />
-                            </div>
+                            <AuftragKarte auftrag={cell.auftrag} rowMitarbeiter={ma} onClick={() => onAuftragClick(cell.auftrag)} />
                           </div>
                         );
                       })}
+                      {extraCells.map((ec) => (
+                        <div
+                          key={`ec_${ec.auftrag.id}`}
+                          className="absolute pointer-events-auto overflow-hidden"
+                          style={{
+                            left:   `${((ec.gridColStart - 1) / totalCols) * 100}%`,
+                            width:  `${(ec.colSpan / totalCols) * 100}%`,
+                            top:    `${(ec.lane / ec.totalLanes) * 100 + 1}%`,
+                            height: `${(1 / ec.totalLanes) * 100 - 2}%`,
+                          }}
+                        >
+                          <AuftragKarte auftrag={ec.auftrag} rowMitarbeiter={ma} onClick={() => onAuftragClick(ec.auftrag)} />
+                        </div>
+                      ))}
                     </div>
                   </td>
                 </tr>
