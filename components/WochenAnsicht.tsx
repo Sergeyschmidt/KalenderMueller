@@ -126,85 +126,6 @@ type CellData =
 // Globaler Index im 50-Spalten-Grid (0-basiert, Tag × 10 + Stundenindex)
 interface BueroOverlay { globalStart: number; globalEnd: number; auftrag: Auftrag | null }
 
-// ── Überlappungs-Erkennung ───────────────────────────────────────────────────
-interface ExtraAuftragCell {
-  auftrag:      Auftrag;
-  gridColStart: number;  // 1-basiert (CSS grid-column)
-  colSpan:      number;
-  lane:         number;
-  totalLanes:   number;
-}
-
-function computeAuftragOverlaps(
-  ma:         string,
-  wochentage: string[],
-  auftraege:  Auftrag[],
-): { laneMap: Map<string, { lane: number; totalLanes: number }>; extraCells: ExtraAuftragCell[] } {
-  const laneMap    = new Map<string, { lane: number; totalLanes: number }>();
-  const extraCells: ExtraAuftragCell[] = [];
-
-  for (let di = 0; di < wochentage.length; di++) {
-    const datum    = wochentage[di];
-    const dayItems = auftraege.filter(
-      a => getAuftragMitarbeiterListe(a).includes(ma) && a.datum === datum && a.typ !== 'buerozeit'
-    );
-    if (dayItems.length === 0) continue;
-
-    // Effektive Zeitspanne jedes Auftrags auf diesem Tag
-    const withRanges = dayItems.map(a => {
-      const multi = !!(a.datum_bis && a.datum_bis !== a.datum);
-      const s = a.start_stunde;
-      const e = multi ? 17 : a.end_stunde;
-      return { a, s, e };
-    });
-
-    // Greedy Lane-Zuweisung (nach Startzeit sortiert)
-    const sorted     = [...withRanges].sort((x, y) => x.s - y.s || x.e - y.e);
-    const laneEnds: number[] = [];
-    const laneAssign = new Map<string, number>();
-    for (const { a, s, e } of sorted) {
-      const free = laneEnds.findIndex(t => t <= s);
-      const ln   = free !== -1 ? free : laneEnds.length;
-      if (free !== -1) laneEnds[free] = e; else laneEnds.push(e);
-      laneAssign.set(a.id, ln);
-    }
-    const maxLanes = laneEnds.length;
-    for (const { a } of withRanges) {
-      laneMap.set(a.id, { lane: laneAssign.get(a.id)!, totalLanes: maxLanes });
-    }
-
-    // Simuliere computeRow-Logik: sekundäre Aufträge ermitteln
-    let colsToSkip = 0;
-    for (let hi = 0; hi < STUNDEN.length; hi++) {
-      const stunde = STUNDEN[hi];
-      if (colsToSkip > 0) {
-        dayItems.filter(a => a.start_stunde === stunde).forEach(a => {
-          if (!extraCells.some(c => c.auftrag.id === a.id)) {
-            const info = laneMap.get(a.id)!;
-            const gridColStart = di * STUNDEN.length + hi + 1;
-            const cs = colSpanFuerAuftrag(a, wochentage, di, hi);
-            extraCells.push({ auftrag: a, gridColStart, colSpan: cs, ...info });
-          }
-        });
-        colsToSkip--;
-        continue;
-      }
-      const allAtHour = dayItems.filter(a => a.start_stunde === stunde);
-      if (allAtHour.length > 0) {
-        colsToSkip = colSpanFuerAuftrag(allAtHour[0], wochentage, di, hi) - 1;
-        allAtHour.slice(1).forEach(a => {
-          const info = laneMap.get(a.id)!;
-          const gridColStart = di * STUNDEN.length + hi + 1;
-          const cs = colSpanFuerAuftrag(a, wochentage, di, hi);
-          extraCells.push({ auftrag: a, gridColStart, colSpan: cs, ...info });
-        });
-      }
-    }
-  }
-
-  return { laneMap, extraCells };
-}
-
 function computeRow(
   ma: string,
   wochentage: string[],
@@ -524,7 +445,6 @@ export default function WochenAnsicht({
                   : null;
               const cells        = computeRow(ma, wochentage, auftraege, urlaube);
               const bueroOverlays = computeBueroOverlays(ma, wochentage, auftraege, autoBuerozeit, ausnahmenSet);
-              const { laneMap, extraCells } = computeAuftragOverlaps(ma, wochentage, auftraege);
               const totalCols    = wochentage.length * STUNDEN.length;
 
               return (
@@ -693,40 +613,57 @@ export default function WochenAnsicht({
                       })}
                     </div>
 
-                    {/* Auftrags-Overlay: absolut über dem Grid, Kollisionen vertikal gestapelt */}
+                    {/* Auftrags-Overlay: absolut über dem Grid, Überschneidungen vertikal gestapelt */}
                     <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 3 }}>
-                      {cells.map((cell, ci) => {
-                        if (cell?.type !== 'auftrag') return null;
-                        const { lane, totalLanes } = laneMap.get(cell.auftrag.id) ?? { lane: 0, totalLanes: 1 };
-                        return (
-                          <div
-                            key={`a_${cell.auftrag.id}`}
-                            className="absolute pointer-events-auto overflow-hidden"
-                            style={{
-                              left:   `${(ci / totalCols) * 100}%`,
-                              width:  `${(cell.colSpan / totalCols) * 100}%`,
-                              top:    `${(lane / totalLanes) * 100 + 1}%`,
-                              height: `${(1 / totalLanes) * 100 - 2}%`,
-                            }}
-                          >
-                            <AuftragKarte auftrag={cell.auftrag} rowMitarbeiter={ma} onClick={() => onAuftragClick(cell.auftrag)} />
-                          </div>
+                      {wochentage.flatMap((datum, di) => {
+                        const tagAuftraege = auftraege.filter(a =>
+                          getAuftragMitarbeiterListe(a).includes(ma) &&
+                          a.datum === datum &&
+                          a.typ !== 'buerozeit'
                         );
+                        if (tagAuftraege.length === 0) return [];
+
+                        // Greedy Lane-Zuweisung für diesen Tag
+                        const withRanges = tagAuftraege.map(a => ({
+                          a, s: a.start_stunde,
+                          e: (a.datum_bis && a.datum_bis !== a.datum) ? 17 : a.end_stunde,
+                        }));
+                        const sorted = [...withRanges].sort((x, y) => x.s - y.s || x.e - y.e);
+                        const laneEnds: number[] = [];
+                        const laneAssign = new Map<string, number>();
+                        for (const { a, s, e } of sorted) {
+                          const free = laneEnds.findIndex(t => t <= s);
+                          const ln   = free !== -1 ? free : laneEnds.length;
+                          if (free !== -1) laneEnds[free] = e; else laneEnds.push(e);
+                          laneAssign.set(a.id, ln);
+                        }
+                        const maxLanes = laneEnds.length;
+
+                        return tagAuftraege.map(a => {
+                          const startHi = STUNDEN_ARR.indexOf(a.start_stunde);
+                          if (startHi < 0) return null;
+                          const multi  = !!(a.datum_bis && a.datum_bis !== a.datum);
+                          const endIdx = multi
+                            ? STUNDEN.length
+                            : (STUNDEN_ARR.indexOf(a.end_stunde) >= 0 ? STUNDEN_ARR.indexOf(a.end_stunde) : STUNDEN.length);
+                          const colSpan = Math.max(1, endIdx - startHi);
+                          const lane    = laneAssign.get(a.id) ?? 0;
+                          return (
+                            <div
+                              key={`ao_${a.id}_d${di}`}
+                              className="absolute pointer-events-auto overflow-hidden"
+                              style={{
+                                left:   `${((di * STUNDEN.length + startHi) / totalCols) * 100}%`,
+                                width:  `${(colSpan / totalCols) * 100}%`,
+                                top:    maxLanes <= 1 ? '12.5%' : `${(lane / maxLanes) * 100 + 1}%`,
+                                height: maxLanes <= 1 ? '75%'   : `${(1 / maxLanes) * 100 - 2}%`,
+                              }}
+                            >
+                              <AuftragKarte auftrag={a} rowMitarbeiter={ma} onClick={() => onAuftragClick(a)} />
+                            </div>
+                          );
+                        });
                       })}
-                      {extraCells.map((ec) => (
-                        <div
-                          key={`ec_${ec.auftrag.id}`}
-                          className="absolute pointer-events-auto overflow-hidden"
-                          style={{
-                            left:   `${((ec.gridColStart - 1) / totalCols) * 100}%`,
-                            width:  `${(ec.colSpan / totalCols) * 100}%`,
-                            top:    `${(ec.lane / ec.totalLanes) * 100 + 1}%`,
-                            height: `${(1 / ec.totalLanes) * 100 - 2}%`,
-                          }}
-                        >
-                          <AuftragKarte auftrag={ec.auftrag} rowMitarbeiter={ma} onClick={() => onAuftragClick(ec.auftrag)} />
-                        </div>
-                      ))}
                     </div>
                   </td>
                 </tr>
