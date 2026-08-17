@@ -642,11 +642,7 @@ export default function WochenAnsicht({
                         return tagAuftraege.map(a => {
                           const startHi = STUNDEN_ARR.indexOf(a.start_stunde);
                           if (startHi < 0) return null;
-                          const multi  = !!(a.datum_bis && a.datum_bis !== a.datum);
-                          const endIdx = multi
-                            ? STUNDEN.length
-                            : (STUNDEN_ARR.indexOf(a.end_stunde) >= 0 ? STUNDEN_ARR.indexOf(a.end_stunde) : STUNDEN.length);
-                          const colSpan = Math.max(1, endIdx - startHi);
+                          const colSpan = colSpanFuerAuftrag(a, wochentage, di, startHi);
                           const lane    = laneAssign.get(a.id) ?? 0;
                           return (
                             <div

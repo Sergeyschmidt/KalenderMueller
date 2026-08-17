@@ -558,11 +558,7 @@ export default function TagAnsicht({
                           const startHi = isStart
                             ? (STUNDEN_ARR.indexOf(a.start_stunde) >= 0 ? STUNDEN_ARR.indexOf(a.start_stunde) : 0)
                             : 0;
-                          const isEnd  = (a.datum_bis ?? a.datum) === datum;
-                          const endIdx = isEnd
-                            ? (STUNDEN_ARR.indexOf(a.end_stunde) >= 0 ? STUNDEN_ARR.indexOf(a.end_stunde) : STUNDEN.length)
-                            : STUNDEN.length;
-                          const colSpan = Math.max(1, endIdx - startHi);
+                          const colSpan = colSpanFuerAuftrag(a, datum, startHi);
                           const lane    = laneAssign.get(a.id) ?? 0;
                           return (
                             <div
